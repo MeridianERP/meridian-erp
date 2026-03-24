@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meridian ERP</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --white:      #ffffff;
+  --bg:         #f4f5f7;
+  --bg2:        #eef0f4;
+  --surface:    #ffffff;
+  --border:     #e2e5ec;
+  --border2:    #c9cdd8;
+  --text:       #1a1d27;
+  --text2:      #5a607a;
+  --text3:      #9199b4;
+  --accent:     #2563eb;
+  --accent-lt:  #eff4ff;
+  --accent-md:  #bfcffd;
+  --green:      #16a34a;
+  --green-lt:   #dcfce7;
+  --amber:      #d97706;
+  --amber-lt:   #fef3c7;
+  --red:        #dc2626;
+  --red-lt:     #fee2e2;
+  --teal:       #0891b2;
+  --teal-lt:    #e0f2fe;
+  --violet:     #7c3aed;
+  --violet-lt:  #ede9fe;
+  --radius:     8px;
+  --radius-lg:  12px;
+  --shadow:     0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,.09), 0 2px 4px rgba(0,0,0,.04);
+}
+
+* { font-family: 'Outfit', sans-serif; }
+body { background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; display: flex; }
+
+/* ── SIDEBAR ── */
+.sidebar { width: 232px; min-height: 100vh; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 20; }
+.logo-wrap { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.logo-sq { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo-sq svg { width: 16px; height: 16px; }
+.logo-name { font-size: 15.5px; font-weight: 600; color: var(--text); letter-spacing: -.2px; }
+.logo-tag { font-size: 10.5px; color: var(--text3); margin-top: 1px; }
+
+.nav { padding: 14px 10px; flex: 1; overflow-y: auto; }
+.nav-section { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .8px; padding: 0 9px; margin: 14px 0 4px; }
+.nav-section:first-child { margin-top: 0; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 8.5px 10px; border-radius: var(--radius); cursor: pointer; color: var(--text2); font-size: 13.5px; font-weight: 400; transition: all .12s; user-select: none; }
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--accent-lt); color: var(--accent); font-weight: 500; }
+.nav-ico { width: 16px; height: 16px; flex-shrink: 0; opacity: .6; }
+.nav-item.active .nav-ico { opacity: 1; }
+.nav-badge { margin-left: auto; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px; }
+.nb-red  { background: var(--red-lt); color: var(--red); }
+.nb-blue { background: var(--accent-lt); color: var(--accent); }
+
+.sidebar-foot { padding: 12px 10px; border-top: 1px solid var(--border); }
+.user-pill { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius); background: var(--bg); }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-md); color: var(--accent); font-size: 11.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.u-name { font-size: 13px; font-weight: 500; }
+.u-role { font-size: 11px; color: var(--text3); }
+
+/* ── MAIN ── */
+.main { margin-left: 232px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+.topbar { height: 56px; background: var(--white); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 26px; gap: 14px; position: sticky; top: 0; z-index: 10; }
+.tb-crumb { font-size: 11.5px; color: var(--text3); }
+.tb-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.tb-space { flex: 1; }
+.tb-actions { display: flex; gap: 8px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all .12s; white-space: nowrap; line-height: 1; }
+.btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #1d55d1; }
+.btn-secondary { background: var(--white); color: var(--text2); border-color: var(--border2); }
+.btn-secondary:hover { background: var(--bg); color: var(--text); }
+.btn-ghost { background: transparent; color: var(--text3); border-color: transparent; }
+.btn-ghost:hover { background: var(--bg2); color: var(--text2); }
+.btn-success { background: var(--green-lt); color: var(--green); border-color: #86efac; }
+.btn-danger  { background: var(--red-lt);   color: var(--red);   border-color: #fca5a5; }
+.btn-sm  { padding: 5px 11px; font-size: 12.5px; }
+.btn-xs  { padding: 3px 8px;  font-size: 11.5px; }
+
+.content { padding: 22px 26px; flex: 1; }
+.view { display: none; }
+.view.active { display: block; animation: fadeUp .17s ease; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── KPI ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 13px; margin-bottom: 20px; }
+.kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 15px 17px; box-shadow: var(--shadow); }
+.kpi-lbl { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 7px; }
+.kpi-val { font-size: 23px; font-weight: 600; font-family: 'JetBrains Mono', monospace; line-height: 1; margin-bottom: 5px; }
+.kpi-note { font-size: 11.5px; color: var(--text3); }
+.kpi-note.up   { color: var(--green); }
+.kpi-note.down { color: var(--red); }
+.kpi-note.warn { color: var(--amber); }
+
+/* ── CARD ── */
+.card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 17px 19px; box-shadow: var(--shadow); }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 13px; }
+.card-ttl { font-size: 13.5px; font-weight: 600; }
+.card-sub { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+
+/* ── TABLE ── */
+.tbl-wrap { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; }
+thead th { background: var(--bg); padding: 9px 13px; text-align: left; font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td { padding: 10px 13px; border-bottom: 1px solid var(--border); font-size: 13.5px; color: var(--text2); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #fafbfc; }
+.tc { color: var(--text) !important; font-weight: 500; }
+.tm { font-family: 'JetBrains Mono', monospace; font-size: 12.5px !important; }
+.ts { color: var(--text3) !important; font-size: 12.5px !important; }
+
+/* ── BADGE ── */
+.b { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 500; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+.b-g { background: var(--green-lt);  color: var(--green); }
+.b-a { background: var(--amber-lt);  color: var(--amber); }
+.b-r { background: var(--red-lt);    color: var(--red); }
+.b-b { background: var(--accent-lt); color: var(--accent); }
+.b-t { background: var(--teal-lt);   color: var(--teal); }
+.b-v { background: var(--violet-lt); color: var(--violet); }
+.b-n { background: var(--bg2);       color: var(--text3); }
+
+/* ── PROGRESS ── */
+.pbar { height: 5px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+.pfill { height: 100%; border-radius: 3px; transition: width .4s; }
+
+/* ── FILTERS ── */
+.filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 13px; flex-wrap: wrap; }
+.search-wrap { display: flex; align-items: center; gap: 7px; background: var(--white); border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 11px; flex: 1; max-width: 260px; }
+.search-wrap input { border: none; outline: none; background: transparent; font-size: 13.5px; color: var(--text); flex: 1; min-width: 0; }
+.search-wrap input::placeholder { color: var(--text3); }
+.fsel { background: var(--white); border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 10px; font-size: 13px; color: var(--text2); cursor: pointer; outline: none; }
+
+/* ── FORM ── */
+.fg { margin-bottom: 12px; }
+.fl { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 4px; display: block; }
+.fi { width: 100%; background: var(--white); border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 11px; font-size: 13.5px; color: var(--text); outline: none; transition: border-color .12s; }
+.fi:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.08); }
+.fi::placeholder { color: var(--text3); }
+select.fi { cursor: pointer; }
+textarea.fi { resize: vertical; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ── MODAL ── */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,20,40,.35); backdrop-filter: blur(2px); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; width: 540px; max-width: 96vw; max-height: 86vh; overflow-y: auto; box-shadow: var(--shadow-md); animation: mIn .17s ease; }
+@keyframes mIn { from { opacity:0; transform:scale(.97) translateY(-6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.mhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; }
+.mtitle { font-size: 15px; font-weight: 600; }
+.mclose { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; color: var(--text3); font-size: 17px; border: none; background: transparent; }
+.mclose:hover { background: var(--bg2); color: var(--text); }
+.mfoot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--border); }
+.divider { height: 1px; background: var(--border); margin: 13px 0; }
+
+/* ── GRIDS ── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-bs { display: grid; grid-template-columns: 1.65fr 1fr; gap: 16px; }
+
+/* ── STOCK CELL ── */
+.sc { display: flex; align-items: center; gap: 7px; }
+.sm { width: 55px; height: 4px; background: var(--bg2); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+
+/* ── GANTT ── */
+.gantt-outer { overflow-x: auto; }
+.gantt-grid  { min-width: 560px; }
+.gh { display: flex; border-bottom: 1px solid var(--border); }
+.ghl { width: 168px; min-width: 168px; padding: 7px 13px; font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; background: var(--bg); border-right: 1px solid var(--border); }
+.gwr { flex: 1; display: grid; grid-template-columns: repeat(4,1fr); }
+.gwc { padding: 7px 8px; font-size: 11px; color: var(--text3); font-weight: 500; border-left: 1px solid var(--border); background: var(--bg); }
+.gr  { display: flex; border-bottom: 1px solid var(--border); min-height: 38px; }
+.gr:last-child { border-bottom: none; }
+.gn  { width: 168px; min-width: 168px; padding: 0 10px 0 13px; font-size: 12px; color: var(--text2); display: flex; align-items: center; border-right: 1px solid var(--border); background: var(--white); }
+.gt  { flex: 1; position: relative; display: grid; grid-template-columns: repeat(4,1fr); }
+.gtc { border-left: 1px solid var(--border); background: var(--white); }
+.gbar { position: absolute; height: 21px; border-radius: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 500; color: white; white-space: nowrap; overflow: hidden; z-index: 1; }
+
+/* ── MRP suggestion ── */
+.mrp-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.mrp-item:last-child { border-bottom: none; }
+.mdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+
+/* ── BOM ── */
+.bom-indent-0 td:first-child { padding-left: 13px; }
+.bom-indent-1 td:first-child { padding-left: 33px; }
+.bom-indent-2 td:first-child { padding-left: 53px; }
+
+/* ── COST ROLLUP ── */
+.cr { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.cr:last-child { border-bottom: none; }
+.cr-total { font-weight: 600; font-size: 13.5px; }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: 22px; right: 22px; background: var(--text); color: #fff; padding: 10px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; box-shadow: var(--shadow-md); z-index: 300; opacity: 0; transition: opacity .2s; pointer-events: none; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="logo-wrap">
+    <div class="logo-sq">
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="6" height="6" rx="1.5" fill="white" opacity=".95"/>
+        <rect x="9" y="1" width="6" height="6" rx="1.5" fill="white" opacity=".75"/>
+        <rect x="1" y="9" width="6" height="6" rx="1.5" fill="white" opacity=".75"/>
+        <rect x="9" y="9" width="6" height="6" rx="1.5" fill="white" opacity=".55"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-name">Meridian ERP</div>
+      <div class="logo-tag">Operations Suite</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-section">Operations</div>
+    <div class="nav-item active" onclick="showView('inventory',this)">
+      <svg class="nav-ico" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a1 1 0 000 2h12a1 1 0 100-2H4zm-2 4a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V7zm0 6a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2z"/></svg>
+      Inventory
+      <span class="nav-badge nb-red" id="badge-inv">3</span>
+    </div>
+    <div class="nav-item" onclick="showView('purchase',this)">
+      <svg class="nav-ico" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>
+      Purchase Orders
+      <span class="nav-badge nb-blue">2</span>
+    </div>
+
+    <div class="nav-section">Planning</div>
+    <div class="nav-item" onclick="showView('mrp',this)">
+      <svg class="nav-ico" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+      MRP & Production
+      <span class="nav-badge nb-blue">4</span>
+    </div>
+    <div class="nav-item" onclick="showView('bom',this)">
+      <svg class="nav-ico" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+      Bill of Materials
+    </div>
+  </nav>
+
+  <div class="sidebar-foot">
+    <div class="user-pill">
+      <div class="avatar">AJ</div>
+      <div>
+        <div class="u-name">Alex Johnson</div>
+        <div class="u-role">Operations Manager</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+  <header class="topbar">
+    <div>
+      <div class="tb-crumb" id="tb-crumb">Operations</div>
+      <div class="tb-title" id="tb-title">Inventory Management</div>
+    </div>
+    <div class="tb-space"></div>
+    <div class="tb-actions">
+      <button class="btn btn-secondary btn-sm" onclick="showToast('Exporting…')">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/><path d="M7.646 11.854a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 10.293V1.5a.5.5 0 00-1 0v8.793L5.354 8.146a.5.5 0 10-.708.708l3 3z"/></svg>
+        Export
+      </button>
+      <button class="btn btn-primary btn-sm" id="cta-btn" onclick="handleCTA()">+ Add Item</button>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ══ INVENTORY ══ -->
+    <div id="view-inventory" class="view active">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-lbl">Total SKUs</div><div class="kpi-val">47</div><div class="kpi-note up">↑ 2 added this week</div></div>
+        <div class="kpi"><div class="kpi-lbl">Inventory Value</div><div class="kpi-val" style="color:var(--accent)">$142k</div><div class="kpi-note">At cost basis</div></div>
+        <div class="kpi"><div class="kpi-lbl">Low Stock Alerts</div><div class="kpi-val" style="color:var(--amber)">3</div><div class="kpi-note warn">⚠ Below reorder point</div></div>
+        <div class="kpi"><div class="kpi-lbl">Out of Stock</div><div class="kpi-val" style="color:var(--red)">1</div><div class="kpi-note down">Immediate action needed</div></div>
+      </div>
+      <div class="filter-row">
+        <div class="search-wrap"><span style="color:var(--text3);font-size:13px">⌕</span><input placeholder="Search items or SKU…" oninput="filterInv(this.value)"></div>
+        <select class="fsel" onchange="filterInvCat(this.value)"><option value="">All Categories</option><option>Finished Goods</option><option>Raw Material</option><option>Packaging</option><option>WIP</option></select>
+        <select class="fsel" onchange="filterInvSt(this.value)"><option value="">All Status</option><option>In Stock</option><option>Low Stock</option><option>Out of Stock</option></select>
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>SKU</th><th>Item Name</th><th>Category</th><th>On Hand</th><th>Reorder Pt.</th><th>Unit Cost</th><th>Value</th><th>Status</th><th></th></tr></thead>
+        <tbody id="inv-body"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ══ PURCHASE ORDERS ══ -->
+    <div id="view-purchase" class="view">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-lbl">Open POs</div><div class="kpi-val">7</div><div class="kpi-note">2 awaiting approval</div></div>
+        <div class="kpi"><div class="kpi-lbl">MTD Spend</div><div class="kpi-val" style="color:var(--accent)">$18.4k</div><div class="kpi-note up">↑ 8% vs prior</div></div>
+        <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:var(--red)">1</div><div class="kpi-note down">Follow-up required</div></div>
+        <div class="kpi"><div class="kpi-lbl">Active Suppliers</div><div class="kpi-val">12</div><div class="kpi-note">Approved vendor list</div></div>
+      </div>
+      <div class="filter-row">
+        <div class="search-wrap"><span style="color:var(--text3);font-size:13px">⌕</span><input placeholder="Search POs or suppliers…" oninput="filterPOs(this.value)"></div>
+        <select class="fsel" onchange="filterPOSt(this.value)"><option value="">All Status</option><option>Draft</option><option>Approved</option><option>Ordered</option><option>Received</option><option>Overdue</option></select>
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>PO Number</th><th>Supplier</th><th>Description</th><th>Amount</th><th>Order Date</th><th>Expected</th><th>Status</th><th></th></tr></thead>
+        <tbody id="po-body"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ══ MRP ══ -->
+    <div id="view-mrp" class="view">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-lbl">Active Work Orders</div><div class="kpi-val">6</div><div class="kpi-note">2 on floor today</div></div>
+        <div class="kpi"><div class="kpi-lbl">Capacity Used</div><div class="kpi-val" style="color:var(--amber)">73%</div><div class="kpi-note warn">Near ceiling this week</div></div>
+        <div class="kpi"><div class="kpi-lbl">MRP Suggestions</div><div class="kpi-val" style="color:var(--accent)">4</div><div class="kpi-note">Auto-generated today</div></div>
+        <div class="kpi"><div class="kpi-lbl">On-Time Rate</div><div class="kpi-val" style="color:var(--green)">91%</div><div class="kpi-note up">↑ 3% this week</div></div>
+      </div>
+      <div class="grid2" style="margin-bottom:18px">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-ttl">MRP Suggestions</div><div class="card-sub">System-generated replenishment & production</div></div>
+            <button class="btn btn-primary btn-sm" onclick="showToast('MRP run complete — 4 suggestions confirmed')">Run MRP</button>
+          </div>
+          <div id="mrp-sugg"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-ttl">Capacity — This Week</div></div>
+          <div id="cap-chart"></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px">
+        <div><div style="font-size:14px;font-weight:600">Production Schedule</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Gantt view — Next 4 weeks</div></div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-wo')">+ Work Order</button>
+      </div>
+      <div class="tbl-wrap"><div class="gantt-outer"><div class="gantt-grid" id="gantt"></div></div></div>
+    </div>
+
+    <!-- ══ BOM ══ -->
+    <div id="view-bom" class="view">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div><div style="font-size:15px;font-weight:600">Bill of Materials</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Multi-level product structure with cost rollup</div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="fsel" style="width:210px" onchange="loadBOM(this.value)" id="bom-sel"><option value="a">Widget A — Standard</option><option value="b">Widget B — Heavy Duty</option><option value="c">Widget C — Mini</option></select>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('BOM exported to CSV')">↓ Export</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-bom-new')">+ New BOM</button>
+        </div>
+      </div>
+      <div class="grid-bs">
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Component</th><th>SKU</th><th>Qty</th><th>UoM</th><th>Unit Cost</th><th>Extended</th><th></th></tr></thead>
+          <tbody id="bom-body"></tbody></table>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-head" style="margin-bottom:10px"><div class="card-ttl">Cost Rollup</div></div>
+            <div id="bom-cost"></div>
+            <div class="divider"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11.5px;color:var(--text3)">Suggested price (2.5× markup)</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--accent);font-size:14px" id="bom-price">—</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head" style="margin-bottom:10px">
+              <div class="card-ttl">Component Availability</div>
+              <span class="b b-n" id="bom-avail-badge">—</span>
+            </div>
+            <div id="bom-avail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ══ MODALS ══ -->
+
+<!-- Add Inventory -->
+<div class="modal-overlay" id="modal-item">
+  <div class="modal">
+    <div class="mhead"><span class="mtitle">Add Inventory Item</span><button class="mclose" onclick="closeModal('modal-item')">×</button></div>
+    <div class="g2">
+      <div class="fg" style="grid-column:span 2"><label class="fl">Item Name *</label><input class="fi" placeholder="e.g. Steel Bracket 50mm" id="ni-name"></div>
+      <div class="fg"><label class="fl">SKU *</label><input class="fi" placeholder="e.g. RM-0050" id="ni-sku"></div>
+      <div class="fg"><label class="fl">Category</label><select class="fi" id="ni-cat"><option>Finished Goods</option><option selected>Raw Material</option><option>Packaging</option><option>WIP</option></select></div>
+      <div class="fg"><label class="fl">Qty on Hand</label><input class="fi" type="number" placeholder="0" id="ni-qty" min="0"></div>
+      <div class="fg"><label class="fl">Reorder Point</label><input class="fi" type="number" placeholder="0" id="ni-rop" min="0"></div>
+      <div class="fg"><label class="fl">Unit Cost ($)</label><input class="fi" type="number" placeholder="0.00" id="ni-cost" step="0.01"></div>
+      <div class="fg"><label class="fl">Unit of Measure</label><select class="fi" id="ni-uom"><option>pcs</option><option>kg</option><option>m</option><option>L</option><option>box</option><option>roll</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Bin / Location</label><input class="fi" placeholder="e.g. Warehouse A — Aisle 3"></div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-item')">Cancel</button>
+      <button class="btn btn-primary" onclick="addItem()">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- New PO -->
+<div class="modal-overlay" id="modal-po">
+  <div class="modal">
+    <div class="mhead"><span class="mtitle">New Purchase Order</span><button class="mclose" onclick="closeModal('modal-po')">×</button></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Supplier *</label><select class="fi" id="po-sup"><option>Steel Components Ltd</option><option>FastPak Packaging</option><option>TechParts Inc</option><option>AlumCo Industries</option><option>RubberTech</option></select></div>
+      <div class="fg"><label class="fl">Expected Delivery</label><input class="fi" type="date" id="po-exp"></div>
+    </div>
+    <div class="fg"><label class="fl">Delivery Address</label><input class="fi" placeholder="123 Warehouse Drive…"></div>
+    <div class="divider"></div>
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Line Items</div>
+    <div id="po-lines"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addPOLine()" style="margin-top:4px">+ Add Line</button>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+      <span style="font-size:12.5px;color:var(--text3)">Order Total:</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:var(--accent)" id="po-total">$0.00</span>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-po')">Cancel</button>
+      <button class="btn btn-secondary" onclick="submitPO('Draft')">Save Draft</button>
+      <button class="btn btn-primary" onclick="submitPO('Ordered')">Submit PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- New WO -->
+<div class="modal-overlay" id="modal-wo">
+  <div class="modal">
+    <div class="mhead"><span class="mtitle">New Work Order</span><button class="mclose" onclick="closeModal('modal-wo')">×</button></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Product *</label><select class="fi"><option>Widget A — Standard</option><option>Widget B — Heavy Duty</option><option>Widget C — Mini</option></select></div>
+      <div class="fg"><label class="fl">Quantity *</label><input class="fi" type="number" placeholder="100" min="1"></div>
+      <div class="fg"><label class="fl">Start Date</label><input class="fi" type="date"></div>
+      <div class="fg"><label class="fl">Due Date</label><input class="fi" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">Priority</label><select class="fi"><option>Normal</option><option>High</option><option>Critical</option></select></div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" rows="2" placeholder="Special instructions…"></textarea></div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wo')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-wo');showToast('Work order created successfully')">Create Work Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- New BOM -->
+<div class="modal-overlay" id="modal-bom-new">
+  <div class="modal">
+    <div class="mhead"><span class="mtitle">New Bill of Materials</span><button class="mclose" onclick="closeModal('modal-bom-new')">×</button></div>
+    <div class="fg"><label class="fl">Product Name *</label><input class="fi" placeholder="e.g. Widget D — XL Edition"></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Revision</label><input class="fi" placeholder="Rev 1.0"></div>
+      <div class="fg"><label class="fl">Effective Date</label><input class="fi" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">Description</label><textarea class="fi" rows="2"></textarea></div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-bom-new')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-bom-new');showToast('BOM created — add components to begin')">Create BOM</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast">✓ <span id="toast-msg"></span></div>
+
+<script>
+// ═══════════════════════════════════
+// DATA
+// ═══════════════════════════════════
+const INV = [
+  {sku:'FG-001',name:'Widget A — Standard',    cat:'Finished Goods',qty:142, rop:50,  cost:24.50,uom:'pcs'},
+  {sku:'FG-002',name:'Widget B — Heavy Duty',  cat:'Finished Goods',qty:38,  rop:40,  cost:67.00,uom:'pcs'},
+  {sku:'FG-003',name:'Widget C — Mini',        cat:'Finished Goods',qty:0,   rop:30,  cost:12.20,uom:'pcs'},
+  {sku:'RM-001',name:'Steel Rod 10mm',         cat:'Raw Material',  qty:1200,rop:500, cost:1.85, uom:'m'},
+  {sku:'RM-002',name:'Aluminium Sheet 3mm',    cat:'Raw Material',  qty:420, rop:200, cost:4.30, uom:'pcs'},
+  {sku:'RM-003',name:'Rubber Gasket 40mm',     cat:'Raw Material',  qty:88,  rop:150, cost:0.55, uom:'pcs'},
+  {sku:'RM-004',name:'Stainless Bolt M8',      cat:'Raw Material',  qty:2400,rop:1000,cost:0.12, uom:'pcs'},
+  {sku:'PK-001',name:'Box — Medium',           cat:'Packaging',     qty:320, rop:100, cost:0.90, uom:'pcs'},
+  {sku:'PK-002',name:'Foam Insert',            cat:'Packaging',     qty:22,  rop:80,  cost:1.20, uom:'pcs'},
+  {sku:'WIP-001',name:'Widget A Sub-Assembly', cat:'WIP',           qty:45,  rop:0,   cost:14.00,uom:'pcs'},
+];
+
+const POS = [
+  {no:'PO-0388',sup:'Steel Components Ltd', desc:'Steel Rod 10mm × 500m',          amt:925,  ord:'2024-06-17',exp:'2024-06-24',st:'Received'},
+  {no:'PO-0387',sup:'FastPak Packaging',    desc:'Box Medium × 500 pcs',           amt:450,  ord:'2024-06-18',exp:'2024-06-28',st:'Ordered'},
+  {no:'PO-0386',sup:'RubberTech',           desc:'Rubber Gasket 40mm × 500',       amt:275,  ord:'2024-06-14',exp:'2024-06-21',st:'Overdue'},
+  {no:'PO-0385',sup:'AlumCo Industries',    desc:'Aluminium Sheet 3mm × 200',      amt:860,  ord:'2024-06-10',exp:'2024-06-17',st:'Received'},
+  {no:'PO-0384',sup:'Steel Components Ltd', desc:'Steel Rod 10mm × 1000m',         amt:1850, ord:'2024-06-05',exp:'2024-06-12',st:'Received'},
+  {no:'PO-0383',sup:'TechParts Inc',        desc:'Stainless Bolt M8 × 5000',       amt:600,  ord:'2024-06-20',exp:'2024-07-05',st:'Draft'},
+  {no:'PO-0382',sup:'FastPak Packaging',    desc:'Foam Insert × 300',              amt:360,  ord:'2024-06-20',exp:'2024-07-04',st:'Draft'},
+];
+
+const BOMS = {
+  a:{name:'Widget A — Standard',rev:'Rev 2.1',
+    rows:[
+      {l:0,name:'Widget A — Standard', sku:'FG-001', qty:1,   uom:'pcs',cost:24.50,t:'product'},
+      {l:1,name:'Sub-Assembly WA',      sku:'WIP-001',qty:1,   uom:'pcs',cost:14.00,t:'semi'},
+      {l:2,name:'Steel Rod 10mm',       sku:'RM-001', qty:0.8, uom:'m',  cost:1.85, t:'raw'},
+      {l:2,name:'Rubber Gasket 40mm',   sku:'RM-003', qty:2,   uom:'pcs',cost:0.55, t:'raw'},
+      {l:2,name:'Stainless Bolt M8',    sku:'RM-004', qty:4,   uom:'pcs',cost:0.12, t:'raw'},
+      {l:1,name:'Aluminium Sheet 3mm',  sku:'RM-002', qty:1,   uom:'pcs',cost:4.30, t:'raw'},
+      {l:1,name:'Box — Medium',         sku:'PK-001', qty:1,   uom:'pcs',cost:0.90, t:'pack'},
+      {l:1,name:'Foam Insert',          sku:'PK-002', qty:1,   uom:'pcs',cost:1.20, t:'pack'},
+    ],labour:4.20,overhead:1.52},
+  b:{name:'Widget B — Heavy Duty',rev:'Rev 1.4',
+    rows:[
+      {l:0,name:'Widget B — Heavy Duty',sku:'FG-002',qty:1,  uom:'pcs',cost:67.00,t:'product'},
+      {l:1,name:'Steel Rod 10mm',       sku:'RM-001',qty:2.4,uom:'m',  cost:1.85, t:'raw'},
+      {l:1,name:'Aluminium Sheet 3mm',  sku:'RM-002',qty:3,  uom:'pcs',cost:4.30, t:'raw'},
+      {l:1,name:'Rubber Gasket 40mm',   sku:'RM-003',qty:4,  uom:'pcs',cost:0.55, t:'raw'},
+      {l:1,name:'Stainless Bolt M8',    sku:'RM-004',qty:12, uom:'pcs',cost:0.12, t:'raw'},
+      {l:1,name:'Box — Medium',         sku:'PK-001',qty:2,  uom:'pcs',cost:0.90, t:'pack'},
+    ],labour:12.00,overhead:4.90},
+  c:{name:'Widget C — Mini',rev:'Rev 1.0',
+    rows:[
+      {l:0,name:'Widget C — Mini',    sku:'FG-003',qty:1,  uom:'pcs',cost:12.20,t:'product'},
+      {l:1,name:'Steel Rod 10mm',     sku:'RM-001',qty:0.3,uom:'m',  cost:1.85, t:'raw'},
+      {l:1,name:'Rubber Gasket 40mm', sku:'RM-003',qty:1,  uom:'pcs',cost:0.55, t:'raw'},
+      {l:1,name:'Stainless Bolt M8',  sku:'RM-004',qty:2,  uom:'pcs',cost:0.12, t:'raw'},
+      {l:1,name:'Box — Medium',       sku:'PK-001',qty:1,  uom:'pcs',cost:0.90, t:'pack'},
+    ],labour:2.80,overhead:1.15},
+};
+
+// ═══════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════
+const META = {
+  inventory:{crumb:'Operations',title:'Inventory Management', cta:'+ Add Item'},
+  purchase: {crumb:'Operations',title:'Purchase Orders',      cta:'+ New PO'},
+  mrp:      {crumb:'Planning',  title:'MRP & Production',     cta:'+ Work Order'},
+  bom:      {crumb:'Planning',  title:'Bill of Materials',    cta:'+ New BOM'},
+};
+function showView(name, el) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  if(el) el.classList.add('active');
+  const m = META[name];
+  document.getElementById('tb-crumb').textContent  = m.crumb;
+  document.getElementById('tb-title').textContent  = m.title;
+  document.getElementById('cta-btn').textContent   = m.cta;
+  if(name==='inventory') renderInv(INV);
+  if(name==='purchase')  renderPOs(POS);
+  if(name==='mrp')       renderMRP();
+  if(name==='bom')       loadBOM('a');
+}
+function handleCTA() {
+  const v = document.querySelector('.view.active').id.replace('view-','');
+  ({inventory:'modal-item',purchase:'modal-po',mrp:'modal-wo',bom:'modal-bom-new'})[v] && openModal(({inventory:'modal-item',purchase:'modal-po',mrp:'modal-wo',bom:'modal-bom-new'})[v]);
+}
+
+// ═══════════════════════════════════
+// INVENTORY
+// ═══════════════════════════════════
+const invStatus = it => it.qty===0 ? {l:'Out of Stock',c:'b-r'} : it.qty<it.rop ? {l:'Low Stock',c:'b-a'} : {l:'In Stock',c:'b-g'};
+function renderInv(items) {
+  document.getElementById('inv-body').innerHTML = items.map((it,i)=>{
+    const s = invStatus(it);
+    const pct = it.rop>0 ? Math.min(100,Math.round(it.qty/it.rop*50)) : 70;
+    const col = it.qty===0?'var(--red)':it.qty<it.rop?'var(--amber)':'var(--green)';
+    return `<tr>
+      <td class="tm ts">${it.sku}</td>
+      <td class="tc">${it.name}</td>
+      <td><span class="b b-n">${it.cat}</span></td>
+      <td><div class="sc"><span class="tm" style="min-width:38px;color:${col}">${it.qty.toLocaleString()}</span><div class="sm"><div class="pfill" style="width:${pct}%;background:${col}"></div></div><span class="ts" style="font-size:11px">${it.uom}</span></div></td>
+      <td class="tm ts">${it.rop}</td>
+      <td class="tm">$${it.cost.toFixed(2)}</td>
+      <td class="tm" style="color:var(--accent)">$${(it.qty*it.cost).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td><span class="b ${s.c}">${s.l}</span></td>
+      <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" onclick="adjustStock(${i})">Adjust</button><button class="btn btn-ghost btn-xs" onclick="showToast('Edit panel: ${it.name}')">Edit</button></div></td>
+    </tr>`;
+  }).join('');
+}
+let iq='',ic='',ist='';
+function filterInv(q){iq=q.toLowerCase();applyInvF();}
+function filterInvCat(c){ic=c;applyInvF();}
+function filterInvSt(s){ist=s;applyInvF();}
+function applyInvF(){renderInv(INV.filter(it=>(!iq||it.name.toLowerCase().includes(iq)||it.sku.toLowerCase().includes(iq))&&(!ic||it.cat===ic)&&(!ist||invStatus(it).l===ist)));}
+function adjustStock(i){
+  const it=INV[i];
+  const d=prompt(`Adjust stock for "${it.name}"\nCurrent: ${it.qty} ${it.uom}\n\nEnter adjustment (e.g. +50 or -20):`);
+  if(d===null)return;
+  const n=parseInt(d);
+  if(isNaN(n)){alert('Invalid number.');return;}
+  INV[i].qty=Math.max(0,it.qty+n);
+  renderInv(INV);
+  document.getElementById('badge-inv').textContent=INV.filter(x=>x.qty===0||x.qty<x.rop).length;
+  showToast(`Adjusted: ${it.name} → ${INV[i].qty} ${it.uom}`);
+}
+function addItem(){
+  const name=document.getElementById('ni-name').value.trim();
+  const sku=document.getElementById('ni-sku').value.trim();
+  if(!name||!sku){alert('Name and SKU are required.');return;}
+  INV.unshift({sku,name,cat:document.getElementById('ni-cat').value,qty:parseInt(document.getElementById('ni-qty').value)||0,rop:parseInt(document.getElementById('ni-rop').value)||0,cost:parseFloat(document.getElementById('ni-cost').value)||0,uom:document.getElementById('ni-uom').value});
+  closeModal('modal-item');renderInv(INV);showToast('Item added to inventory');
+}
+
+// ═══════════════════════════════════
+// PURCHASE ORDERS
+// ═══════════════════════════════════
+const poB = s=>({Received:'b-g',Ordered:'b-b',Draft:'b-n',Overdue:'b-r',Approved:'b-t'}[s]||'b-n');
+function renderPOs(items){
+  document.getElementById('po-body').innerHTML=items.map(p=>`<tr>
+    <td class="tm" style="color:var(--accent)">${p.no}</td>
+    <td class="tc">${p.sup}</td>
+    <td style="font-size:12.5px;color:var(--text2)">${p.desc}</td>
+    <td class="tm">$${p.amt.toLocaleString()}</td>
+    <td class="ts">${p.ord}</td>
+    <td class="ts">${p.exp}</td>
+    <td><span class="b ${poB(p.st)}">${p.st}</span></td>
+    <td><div style="display:flex;gap:4px">${p.st==='Draft'?`<button class="btn btn-success btn-xs" onclick="approvePO('${p.no}')">Approve</button>`:''}${p.st==='Overdue'?`<button class="btn btn-danger btn-xs" onclick="showToast('Follow-up sent to '+p.sup)">Follow Up</button>`:''}<button class="btn btn-ghost btn-xs" onclick="showToast('Opening PO: ${p.no}')">View</button></div></td>
+  </tr>`).join('');
+}
+function filterPOs(q){const l=q.toLowerCase();renderPOs(POS.filter(p=>p.no.toLowerCase().includes(l)||p.sup.toLowerCase().includes(l)||p.desc.toLowerCase().includes(l)));}
+function filterPOSt(s){renderPOs(s?POS.filter(p=>p.st===s):POS);}
+function approvePO(no){const p=POS.find(x=>x.no===no);if(p){p.st='Ordered';renderPOs(POS);showToast(`${no} approved and submitted`);}}
+
+let pol=0;
+function addPOLine(){
+  pol++;
+  const d=document.createElement('div');
+  d.style.cssText='display:grid;grid-template-columns:1fr 74px 84px 28px;gap:6px;margin-bottom:6px;align-items:center';
+  d.innerHTML=`<input class="fi" placeholder="Item description" style="font-size:13px" oninput="calcPOTotal()">
+    <input class="fi" type="number" placeholder="Qty" style="font-size:13px" oninput="calcPOTotal()">
+    <input class="fi" type="number" placeholder="Unit $" step="0.01" style="font-size:13px" oninput="calcPOTotal()">
+    <button class="btn btn-ghost btn-xs" onclick="this.parentElement.remove();calcPOTotal()" style="padding:4px 6px">✕</button>`;
+  document.getElementById('po-lines').appendChild(d);
+}
+function calcPOTotal(){
+  let t=0;
+  document.querySelectorAll('#po-lines>div').forEach(r=>{
+    const inp=r.querySelectorAll('input');
+    t+=(parseFloat(inp[1]?.value)||0)*(parseFloat(inp[2]?.value)||0);
+  });
+  document.getElementById('po-total').textContent='$'+t.toFixed(2);
+}
+function submitPO(st){
+  const sup=document.getElementById('po-sup').value;
+  const exp=document.getElementById('po-exp').value;
+  const amt=parseFloat(document.getElementById('po-total').textContent.replace('$',''))||0;
+  const no='PO-0'+(389+POS.length);
+  POS.unshift({no,sup,desc:'New purchase order',amt,ord:new Date().toISOString().slice(0,10),exp:exp||'TBD',st});
+  closeModal('modal-po');renderPOs(POS);
+  document.getElementById('po-lines').innerHTML='';
+  document.getElementById('po-total').textContent='$0.00';
+  showToast(`${no} created — ${st}`);
+}
+
+// ═══════════════════════════════════
+// MRP
+// ═══════════════════════════════════
+function renderMRP(){
+  const sugg=[
+    {act:'Purchase',item:'Rubber Gasket 40mm',qty:500,pri:'High',  reason:'Stock 88 < reorder 150 — shortfall 62',col:'var(--red)'},
+    {act:'Purchase',item:'Foam Insert',        qty:200,pri:'High',  reason:'Stock 22 < reorder 80 — shortfall 58', col:'var(--red)'},
+    {act:'Produce', item:'Widget A',            qty:100,pri:'Normal',reason:'Forecast demand: 135 units in next 2 wks',col:'var(--amber)'},
+    {act:'Purchase',item:'Box — Medium',        qty:150,pri:'Normal',reason:'Projected stockout in 12 days',          col:'var(--amber)'},
+  ];
+  document.getElementById('mrp-sugg').innerHTML=sugg.map(s=>`<div class="mrp-item">
+    <div class="mdot" style="background:${s.col}"></div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span class="b ${s.act==='Purchase'?'b-t':'b-b'}" style="font-size:10.5px">${s.act}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${s.item}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent)">×${s.qty}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text3)">${s.reason}</div>
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0">
+      <span class="b ${s.pri==='High'?'b-r':'b-a'}" style="font-size:10.5px">${s.pri}</span>
+      <button class="btn btn-ghost btn-xs" onclick="acceptMRP('${s.item}','${s.act}')">Accept</button>
+    </div>
+  </div>`).join('');
+
+  const days=[{d:'Monday',p:82},{d:'Tuesday',p:68},{d:'Wednesday',p:90},{d:'Thursday',p:73},{d:'Friday',p:55}];
+  document.getElementById('cap-chart').innerHTML=days.map(d=>{
+    const c=d.p>85?'var(--red)':d.p>70?'var(--amber)':'var(--green)';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px">
+        <span style="color:var(--text2)">${d.d}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:${c}">${d.p}%</span>
+      </div>
+      <div class="pbar"><div class="pfill" style="width:${d.p}%;background:${c}"></div></div>
+    </div>`;
+  }).join('');
+
+  const wos=[
+    {no:'WO-0092',lbl:'Widget A × 100',s:0,   d:1.5,c:'#2563eb'},
+    {no:'WO-0091',lbl:'Widget B × 40', s:1,   d:2.0,c:'#0891b2'},
+    {no:'WO-0090',lbl:'Widget C × 200',s:0.5, d:1.0,c:'#16a34a'},
+    {no:'WO-0089',lbl:'Widget A × 60', s:2,   d:1.5,c:'#7c3aed'},
+    {no:'WO-0088',lbl:'Widget B × 20', s:3,   d:0.8,c:'#d97706'},
+  ];
+  const weeks=['Week 23','Week 24','Week 25','Week 26'];
+  document.getElementById('gantt').innerHTML=`
+    <div class="gh">
+      <div class="ghl">Work Order</div>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr)">${weeks.map(w=>`<div class="gwc">${w}</div>`).join('')}</div>
+    </div>
+    ${wos.map(w=>`<div class="gr">
+      <div class="gn"><span style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-right:4px">${w.no}</span></div>
+      <div class="gt">
+        ${weeks.map(()=>`<div class="gtc"></div>`).join('')}
+        <div class="gbar" style="left:${w.s/4*100}%;width:${w.d/4*100}%;background:${w.c}">${w.lbl}</div>
+      </div>
+    </div>`).join('')}`;
+}
+function acceptMRP(item,act){
+  if(act==='Purchase'){openModal('modal-po');showToast(`PO pre-filled for: ${item}`);}
+  else{openModal('modal-wo');showToast(`Work order pre-filled for: ${item}`);}
+}
+
+// ═══════════════════════════════════
+// BOM
+// ═══════════════════════════════════
+const typeMap={product:{b:'b-b',i:'◈'},semi:{b:'b-t',i:'◎'},raw:{b:'b-n',i:'○'},pack:{b:'b-a',i:'□'}};
+function loadBOM(key){
+  const bom=BOMS[key];
+  document.getElementById('bom-body').innerHTML=bom.rows.map((r,i)=>{
+    const tm=typeMap[r.t];
+    const indent=`padding-left:${13+r.l*20}px`;
+    const prefix=r.l>0?`<span style="color:var(--text3);font-size:11.5px;margin-right:4px">${r.l===1?'├─':'└─'}</span>`:'';
+    return `<tr>
+      <td style="${indent}">${prefix}<span class="b ${tm.b}" style="font-size:10px;margin-right:5px">${tm.i}</span><span style="font-weight:${r.l===0?600:400};color:${r.l===0?'var(--text)':'var(--text2)'}">${r.name}</span></td>
+      <td class="tm ts">${r.sku}</td>
+      <td class="tm" style="color:var(--accent)">${r.qty}</td>
+      <td class="ts">${r.uom}</td>
+      <td class="tm">$${r.cost.toFixed(2)}</td>
+      <td class="tm">$${(r.qty*r.cost).toFixed(2)}</td>
+      <td><button class="btn btn-ghost btn-xs" onclick="showToast('Editing BOM line…')">Edit</button></td>
+    </tr>`;
+  }).join('');
+
+  const matCost=bom.rows.filter(r=>r.t==='raw'||r.t==='pack').reduce((s,r)=>s+r.qty*r.cost,0);
+  const semiCost=bom.rows.filter(r=>r.t==='semi').reduce((s,r)=>s+r.qty*r.cost,0);
+  const total=matCost+semiCost+bom.labour+bom.overhead;
+  document.getElementById('bom-cost').innerHTML=`
+    <div class="cr"><span style="color:var(--text2)">Raw Materials</span><span class="tm">$${matCost.toFixed(2)}</span></div>
+    <div class="cr"><span style="color:var(--text2)">Semi-Finished</span><span class="tm">$${semiCost.toFixed(2)}</span></div>
+    <div class="cr"><span style="color:var(--text2)">Labour</span><span class="tm">$${bom.labour.toFixed(2)}</span></div>
+    <div class="cr"><span style="color:var(--text2)">Overhead</span><span class="tm">$${bom.overhead.toFixed(2)}</span></div>
+    <div class="cr cr-total"><span>Total Cost</span><span class="tm" style="color:var(--accent)">$${total.toFixed(2)}</span></div>`;
+  document.getElementById('bom-price').textContent='$'+(total*2.5).toFixed(2);
+
+  const comps=bom.rows.filter(r=>r.t!=='product');
+  let allOk=true;
+  document.getElementById('bom-avail').innerHTML=comps.map(r=>{
+    const inv=INV.find(x=>x.sku===r.sku);
+    const oh=inv?inv.qty:0;
+    const ok=oh>=r.qty;
+    if(!ok)allOk=false;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+      <span style="color:var(--text2)">${r.name}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tm" style="color:${ok?'var(--green)':'var(--red)'}">${oh} ${r.uom}</span>
+        <span class="b ${ok?'b-g':'b-r'}" style="font-size:10.5px">${ok?'OK':'Short'}</span>
+      </div>
+    </div>`;
+  }).join('');
+  const badge=document.getElementById('bom-avail-badge');
+  badge.textContent=allOk?'All Available':'Shortages';
+  badge.className='b '+(allOk?'b-g':'b-r');
+}
+
+// ═══════════════════════════════════
+// MODALS / TOAST
+// ═══════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+let toastT;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.style.opacity='1';clearTimeout(toastT);
+  toastT=setTimeout(()=>t.style.opacity='0',3000);
+}
+
+// INIT
+renderInv(INV);
+</script>
+</body>
+</html>
