@@ -2241,8 +2241,8 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 // ═══════════════════════════════════════════════════════════════
 // MERIDIAN ERP — SUPABASE CONNECTED
 // ═══════════════════════════════════════════════════════════════
-const SB_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co';
-const SB_KEY = 'sb_publishable_umA_ii7NFcz3OSL_CveAnA_s524g_Mz';
+const SB_URL = 'https://ggbpzbzhdryzpzzxlyvv.supabase.co';
+const SB_KEY = 'sb_publishable_Nzx7ejs2ciDKbuzQVzHFkg_IiWo3r1w';
 
 // ═══════════════════════════════════════════
 // ENVIRONMENT & SECURITY CONFIG
@@ -2251,7 +2251,8 @@ const APP_ENV = (() => {
   const host = window.location.hostname;
   if (host.includes('localhost') || host.includes('127.0.0.1')) return 'development';
   if (host.includes('sandbox') || host.includes('staging') || host.includes('sb-')) return 'sandbox';
-  return 'production';
+  // This file is hardcoded as sandbox — always show sandbox banner
+  return 'sandbox';
 })();
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
@@ -5659,7 +5660,7 @@ async function submitHelpMsg() {
       ? AGENT_SYSTEM_PROMPT + '\n\n' + buildAgentContext()
       : HELP_SYSTEM_PROMPT + '\n\n' + buildHelpContext();
 
-    const PROXY_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co/functions/v1/claude-proxy';
+    const PROXY_URL = 'https://ggbpzbzhdryzpzzxlyvv.supabase.co/functions/v1/claude-proxy';
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
@@ -6480,7 +6481,7 @@ async function submitImplMsg() {
   const msgs = document.getElementById('impl-chat-messages');
 
   try {
-    const PROXY_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co/functions/v1/claude-proxy';
+    const PROXY_URL = 'https://ggbpzbzhdryzpzzxlyvv.supabase.co/functions/v1/claude-proxy';
     const response = await fetch(PROXY_URL, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SB_KEY, 'apikey':SB_KEY },
