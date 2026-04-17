@@ -11043,16 +11043,26 @@ function renderForecast() {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
-    // But keep fpanel-view visible so the kpi-grid shows
+    // But keep fpanel-view visible so the kpi-grid shows, hiding only the content cards
     const viewPanel = document.getElementById('fpanel-view');
-    if (viewPanel) viewPanel.style.display = '';
+    if (viewPanel) {
+      viewPanel.style.display = '';
+      // Hide the content cards (siblings of kpi-grid) but not the kpi-grid itself
+      Array.from(viewPanel.children).forEach(child => {
+        if (child.id !== 'fv-kpis') child.style.display = 'none';
+      });
+    }
     return;
   }
 
   // Materials exist — restore panels
   ['fpanel-view','fpanel-edit','fpanel-compare'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none'; // hide all first
+    if (el) {
+      el.style.display = 'none';
+      // Restore all children visibility
+      Array.from(el.children).forEach(child => child.style.display = '');
+    }
   });
   const activePanel = document.getElementById('fpanel-' + activeForecastTab);
   if (activePanel) activePanel.style.display = '';
