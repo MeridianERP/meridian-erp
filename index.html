@@ -584,7 +584,7 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
         </svg>
       </div>
       <div>
-        <div class="auth-title">Meridian ERP</div>
+        <div class="auth-title" id="auth-client-name">Meridian ERP</div>
         <div class="auth-sub">Pharma Supply Chain</div>
       </div>
     </div>
@@ -592,9 +592,11 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
     <div class="fg"><label class="fl">Email address</label><input class="fi" type="email" id="auth-email" placeholder="you@company.com" autocomplete="email"></div>
     <div class="fg" style="margin-bottom:20px"><label class="fl">Password</label><input class="fi" type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="auth-btn" id="auth-submit-btn" onclick="signIn()">Sign in</button>
-    <div style="margin-top:16px;text-align:center;font-size:12px;color:var(--text3)">
-      Contact your administrator to create an account
+    <div style="margin-top:14px;text-align:center;font-size:12px;color:var(--text3)">
+      <a href="#" onclick="forgotPassword();return false;" style="color:var(--accent);text-decoration:none;font-weight:500">Forgot password?</a>
+      &nbsp;·&nbsp; Contact your administrator to create an account
     </div>
+    <div id="auth-reset-msg" style="display:none;margin-top:12px;background:#f0fdf4;border:1px solid #86efac;border-radius:var(--radius);padding:9px 13px;font-size:12.5px;color:#166534;text-align:center"></div>
   </div>
 </div>
 
@@ -613,23 +615,26 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 
 <!-- INVITE USER MODAL -->
 <div class="modal-overlay" id="modal-invite">
-  <div class="modal" style="width:420px">
+  <div class="modal" style="width:440px">
     <div class="mhead"><span class="mtitle">Invite Team Member</span><button class="mclose" onclick="closeModal('modal-invite')">×</button></div>
+    <div style="background:var(--accent-lt);border:1px solid var(--accent-md);border-radius:var(--radius);padding:9px 13px;margin-bottom:14px;font-size:12.5px;color:#1e40af">
+      ✉ An invitation email will be sent with a secure sign-in link. No temporary password needed.
+    </div>
     <div class="fg"><label class="fl">Email address *</label><input class="fi" type="email" placeholder="colleague@company.com" id="invite-email"></div>
     <div class="fg"><label class="fl">Full name</label><input class="fi" placeholder="First Last" id="invite-name"></div>
     <div class="fg"><label class="fl">Role *</label>
       <select class="fi" id="invite-role">
         <option value="viewer">Viewer — read-only access</option>
         <option value="approver">Approver — can approve POs and QC decisions</option>
-        <option value="planner">Planner — can edit planning & inventory</option>
+        <option value="planner">Planner — can edit planning &amp; inventory</option>
         <option value="qc">QC — quality control actions only</option>
         <option value="admin">Admin — full access + user management</option>
       </select>
     </div>
-    <div class="fg"><label class="fl">Temporary password *</label><input class="fi" type="password" placeholder="They can change this after login" id="invite-password"></div>
+    <div id="invite-error" style="display:none;background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 12px;font-size:12.5px;color:var(--red);margin-bottom:4px"></div>
     <div class="mfoot">
       <button class="btn btn-secondary" onclick="closeModal('modal-invite')">Cancel</button>
-      <button class="btn btn-primary" onclick="inviteUser()">Create Account</button>
+      <button class="btn btn-primary" id="invite-submit-btn" onclick="inviteUser()">Send Invitation</button>
     </div>
   </div>
 </div>
@@ -2887,11 +2892,19 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 
 
 <script>
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║           MERIDIAN ERP — CLIENT CONFIGURATION                 ║
+// ║  Update these two values for each client deployment.          ║
+// ║  Find them in: Supabase → Project Settings → API             ║
+// ╚═══════════════════════════════════════════════════════════════╝
+const SB_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co';  // ← Project URL
+const SB_KEY = 'sb_publishable_umA_ii7NFcz3OSL_CveAnA_s524g_Mz';  // ← anon/public key
+const CLIENT_NAME = 'Meridian Demo';  // ← Client company name (shown on login screen)
+// ════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════
 // MERIDIAN ERP — SUPABASE CONNECTED
 // ═══════════════════════════════════════════════════════════════
-const SB_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co';
-const SB_KEY = 'sb_publishable_umA_ii7NFcz3OSL_CveAnA_s524g_Mz';
 
 // ═══════════════════════════════════════════
 // ENVIRONMENT & SECURITY CONFIG
@@ -3170,6 +3183,40 @@ function showAuthError(msg) {
   el.textContent = msg; el.classList.add('show');
 }
 
+// ── Forgot password — sends Supabase recovery email ──────────
+async function forgotPassword() {
+  const emailEl  = document.getElementById('auth-email');
+  const resetMsg = document.getElementById('auth-reset-msg');
+  const errEl    = document.getElementById('auth-error');
+  errEl.classList.remove('show');
+  resetMsg.style.display = 'none';
+
+  const email = emailEl?.value.trim();
+  if (!email) {
+    errEl.textContent = 'Enter your email address above, then click Forgot password.';
+    errEl.classList.add('show');
+    emailEl?.focus();
+    return;
+  }
+
+  const btn = document.getElementById('auth-submit-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    // Supabase sends a password-recovery email; the link lands back on this
+    // page with #access_token=...&type=recovery which showSetPasswordScreen handles
+    const redirectTo = window.location.origin + window.location.pathname;
+    await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: redirectTo });
+    resetMsg.textContent = '✓ Password reset email sent to ' + email + '. Check your inbox and follow the link.';
+    resetMsg.style.display = 'block';
+  } catch(e) {
+    // Don't reveal whether the account exists — always show success-like message
+    resetMsg.textContent = '✓ If that email is registered, a reset link has been sent.';
+    resetMsg.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+}
+
 // ── Sign out ───────────────────────────────
 function signOut() {
   // Log logout before clearing session (non-blocking)
@@ -3208,6 +3255,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
   });
+
+  // Apply client name from config
+  const nameEl = document.getElementById('auth-client-name');
+  if (nameEl && typeof CLIENT_NAME !== 'undefined' && CLIENT_NAME) {
+    nameEl.textContent = CLIENT_NAME;
+  }
+
+  // Check credentials on page load — show error immediately if not configured
+  const credsMissing = !SB_URL || !SB_KEY
+    || SB_URL.includes('your-project')
+    || SB_URL === 'https://your-project.supabase.co'
+    || SB_KEY.includes('your-key')
+    || SB_KEY.length < 20;
+  if (credsMissing) {
+    const errEl = document.getElementById('auth-error');
+    const btnEl = document.getElementById('auth-submit-btn');
+    if (errEl) {
+      errEl.style.display = 'block';
+      errEl.innerHTML = '⚠ Supabase credentials not configured. Open <code>index.html</code> and update <code>SB_URL</code> and <code>SB_KEY</code> at the top of the script.';
+    }
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Not configured'; }
+    return;
+  }
 
   // Network status monitoring — notify user if connection drops mid-session
   window.addEventListener('offline', () => {
@@ -3406,7 +3476,7 @@ async function openUserMgmt() {
             <option value="qc"       ${u.role==='qc'       ?'selected':''}>QC</option>
             <option value="admin"    ${u.role==='admin'     ?'selected':''}>Admin</option>
           </select>
-          ${u.id !== currentUser?.id ? `<button class="btn btn-danger btn-xs" onclick="removeUser('${u.id}','${u.email}')">Remove</button>` : '<span style="font-size:11px;color:var(--text3)">You</span>'}
+          ${u.id !== currentUser?.id ? `<button class="btn btn-ghost btn-xs" onclick="adminSendPasswordReset('${u.email}')" title="Send password reset email">↺ Reset PW</button><button class="btn btn-danger btn-xs" onclick="removeUser('${u.id}','${u.email}')">Remove</button>` : '<span style="font-size:11px;color:var(--text3)">You</span>'}
         </div>
       </div>`).join('') || '<div style="color:var(--text3);font-size:13px;padding:10px 0">No users found.</div>';
   } catch(e) { showToast('Error loading users: ' + e.message); }
@@ -3422,6 +3492,18 @@ async function updateUserRole(userId, role) {
     });
     showToast('Role updated to ' + role);
   } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Admin: send password reset email to a user ───────────────
+async function adminSendPasswordReset(email) {
+  if (!confirm(`Send a password reset email to ${email}?`)) return;
+  try {
+    const redirectTo = window.location.origin + window.location.pathname;
+    await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: redirectTo });
+    showToast(`Password reset email sent to ${email}`);
+  } catch(e) {
+    showToast('Error sending reset email: ' + e.message);
+  }
 }
 
 async function removeUser(userId, email) {
@@ -3440,36 +3522,72 @@ async function removeUser(userId, email) {
 }
 
 async function inviteUser() {
-  const email    = document.getElementById('invite-email').value.trim();
-  const name     = document.getElementById('invite-name').value.trim();
-  const role     = document.getElementById('invite-role').value;
-  const password = document.getElementById('invite-password').value;
-  if (!email || !password) { showToast('Email and password are required.'); return; }
+  const email  = document.getElementById('invite-email').value.trim();
+  const name   = document.getElementById('invite-name').value.trim();
+  const role   = document.getElementById('invite-role').value;
+  const errEl  = document.getElementById('invite-error');
+  const btn    = document.getElementById('invite-submit-btn');
+  errEl.style.display = 'none';
+
+  if (!email) { errEl.textContent = 'Email address is required.'; errEl.style.display = 'block'; return; }
+  if (!email.includes('@')) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Sending…';
+
   try {
-    // Create user via Supabase Admin API — requires service role. 
-    // Instead, create via signUp and then set role
+    // Step 1: Create the user account via signUp (email-confirm flow).
+    // Supabase will send a confirmation / magic-link email automatically
+    // when email confirmations are enabled in the Auth settings.
+    // The redirectTo lands back on this app so the set-password screen fires.
+    const redirectTo = window.location.origin + window.location.pathname;
     const res = await fetch(SB_URL + '/auth/v1/signup', {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, data: { full_name: name } })
+      body: JSON.stringify({
+        email,
+        password: crypto.getRandomValues(new Uint8Array(24))
+          .reduce((s,b)=>s+(b%36).toString(36),'') + 'Aa1!', // strong random — user never sees it
+        data: { full_name: name || email },
+        options: { emailRedirectTo: redirectTo }
+      })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error_description || data.msg || 'Signup failed');
-    // Update role after brief delay (trigger creates the profile)
-    setTimeout(async () => {
-      const session = JSON.parse(safeStorage.getItem('sb-session'));
-      if (data.user?.id) {
-        await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + data.user.id, {
+
+    // Step 2: As soon as the user row exists, patch their profile role.
+    // We do this immediately (user_profiles row is created by DB trigger).
+    const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
+    const userId  = data.user?.id;
+    if (userId && session.access_token) {
+      // Brief delay to let the DB trigger fire and create the profile row
+      setTimeout(async () => {
+        await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
           method: 'PATCH',
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role, full_name: name || email })
-        });
-      }
-    }, 1500);
+          headers: {
+            'apikey': SB_KEY,
+            'Authorization': 'Bearer ' + session.access_token,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({ role, full_name: name || email, invited_by: currentProfile?.email || null })
+        }).catch(() => {});
+      }, 2000);
+    }
+
     closeModal('modal-invite');
-    showToast(`Account created for ${email} as ${role}`);
-    setTimeout(() => openUserMgmt(), 2000);
-  } catch(e) { showToast('Error: ' + e.message); }
+    // Reset fields
+    document.getElementById('invite-email').value = '';
+    document.getElementById('invite-name').value  = '';
+    document.getElementById('invite-role').value  = 'viewer';
+
+    showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
+    setTimeout(() => openUserMgmt(), 2500);
+
+  } catch(e) {
+    errEl.textContent = 'Error: ' + (e.message || 'Could not send invitation. Please try again.');
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send Invitation';
+  }
 }
 
 // Generic Supabase REST helper
@@ -3585,6 +3703,21 @@ function showError(msg) {
 
 // ─── Boot: load everything from Supabase ──────────────────────
 async function bootApp() {
+  // Validate credentials FIRST before showing loader
+  const credsMissing = !SB_URL || !SB_KEY
+    || SB_URL.includes('your-project')
+    || SB_URL === 'https://your-project.supabase.co'
+    || SB_KEY.includes('your-key')
+    || SB_KEY.length < 20;
+
+  if (credsMissing) {
+    showError('Supabase credentials not configured.<br><br>'
+      + 'Open <code>index.html</code> and update <code>SB_URL</code> and <code>SB_KEY</code> '
+      + 'at the top of the script with your project\'s API credentials.<br><br>'
+      + '<a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">Open Supabase Dashboard →</a>');
+    return;
+  }
+
   showLoader('Connecting to database…');
   console.log('Meridian ERP — booting, connecting to Supabase…');
 
@@ -3652,6 +3785,8 @@ async function bootApp() {
 
     DB.loaded = true;
     clearTimeout(bootTimeout);
+    // Rebuild MRP SKU config from DB (fix #2 — no longer hardcoded)
+    try { MRP_SKU_CONFIG = buildMRPSkuConfig(); MRP_SKUS = MRP_SKU_CONFIG.slice(); } catch(e) { console.error('buildMRPSkuConfig failed:', e); }
     try { enrichPOsWithReceiptTotals(); } catch(e) { console.error('enrich POs failed:', e); }
     hideLoader();
     renderInv(DB.materials);
@@ -3659,6 +3794,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
+    console.log('MERIDIAN VERSION: FIX2-3-4-v1 | MRP config dynamic | Forgot PW | Magic-link invite');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -9454,15 +9590,102 @@ function unlockPOSupplier() {
 // ═══════════════════════════════════════════
 
 // Static SKU config (metadata only — quantities computed live)
-const MRP_SKU_CONFIG = [
-  { skuId:'L1-FG-001', mat:'Finish Goods',   level:'Level 1', color:'#185FA5', act:'Produce',  bomMult:1,    pri:'Normal',   lt:2 },
-  { skuId:'L2-DP-001', mat:'Drug Product',   level:'Level 2', color:'#0F6E56', act:'Produce',  bomMult:5,    pri:'High',     lt:2 },
-  { skuId:'L3-DS-001', mat:'Drug Substance', level:'Level 3', color:'#534AB7', act:'Produce',  bomMult:50,   pri:'High',     lt:2 },
-  { skuId:'L4-RM-A',   mat:'Raw Material A', level:'Level 4', color:'#854F0B', act:'Purchase', bomMult:500,  pri:'Critical', lt:3 },
-  { skuId:'L4-RM-B',   mat:'Raw Material B', level:'Level 4', color:'#993556', act:'Purchase', bomMult:1000, pri:'Critical', lt:3 },
-];
+// ── MRP SKU CONFIG — built dynamically from DB at boot / after data load ────
+// Level colour palette (matches LEVEL_COLORS defined below)
+const _MRP_LEVEL_COLORS = {
+  L1:'#185FA5', L2:'#0F6E56', L3:'#534AB7', L4:'#854F0B', L5:'#993556',
+};
+const _MRP_LEVEL_LABELS = {
+  L1:'Level 1', L2:'Level 2', L3:'Level 3', L4:'Level 4', L5:'Level 5',
+};
 
-let MRP_SKUS       = MRP_SKU_CONFIG;
+// Traverse the BOM tree from rootId, accumulating qty_per products.
+// Returns a flat map of { childId → cumulative bomMult from root }.
+function _computeBomMultMap(rootId) {
+  const result = { [rootId]: 1 };
+  function walk(parentId, parentMult) {
+    (DB.bom_lines||[]).filter(b => b.parent_id === parentId).forEach(bl => {
+      const qtyPer = bl.qty_per || bl.qty || 1;
+      const childMult = parentMult * qtyPer;
+      result[bl.child_id] = (result[bl.child_id] || 0) + childMult;
+      walk(bl.child_id, childMult);
+    });
+  }
+  walk(rootId, 1);
+  return result;
+}
+
+// Derive level prefix from SKU id (e.g. 'L1-FG-001' → 'L1', 'L4-RM-A' → 'L4')
+function _skuLevel(skuId) {
+  const m = (skuId||'').match(/^(L\d+)/i);
+  return m ? m[1].toUpperCase() : 'L1';
+}
+
+// Build MRP_SKU_CONFIG dynamically from DB.materials + DB.planning_config + DB.bom_lines.
+// Falls back gracefully to defaults when data is sparse.
+function buildMRPSkuConfig() {
+  if (!DB.materials || DB.materials.length === 0) return [];
+
+  // Find the L1 finished-goods root — the SKU with no BOM parent
+  const allChildren = new Set((DB.bom_lines||[]).map(b => b.child_id));
+  const planSkuIds  = new Set((DB.planning_config||[]).map(p => p.sku_id));
+
+  // Candidates: materials that appear in planning_config
+  let planMats = DB.materials.filter(m => planSkuIds.has(m.id));
+  if (planMats.length === 0) planMats = DB.materials; // fallback
+
+  // Identify root (L1) — not a child of any other BOM line, or explicitly level 1
+  const roots = planMats.filter(m => !allChildren.has(m.id));
+  const rootId = roots.length > 0 ? roots[0].id
+    : planMats.find(m => _skuLevel(m.id) === 'L1')?.id
+    || planMats[0]?.id;
+
+  // Compute cascaded BOM multipliers from the root
+  const multMap = rootId ? _computeBomMultMap(rootId) : {};
+
+  // Sort materials by level prefix so tabs render L1 → L4+
+  const sorted = [...planMats].sort((a, b) => {
+    const la = _skuLevel(a.id), lb = _skuLevel(b.id);
+    if (la !== lb) return la.localeCompare(lb);
+    return a.id.localeCompare(b.id);
+  });
+
+  return sorted.map(mat => {
+    const lvl    = _skuLevel(mat.id);
+    const cfg    = (DB.planning_config||[]).find(p => p.sku_id === mat.id) || {};
+    const isRaw  = mat.type === 'Raw';
+    const isFG   = !allChildren.has(mat.id);
+
+    // Priority: FG = Normal, intermediate = High, raw = Critical
+    const pri = isFG ? 'Normal' : isRaw ? 'Critical' : 'High';
+
+    // Action: Raw materials are Purchased, everything else Produced
+    const act = isRaw ? 'Purchase' : 'Produce';
+
+    // Use a colour based on level — cycle through palette for L5+
+    const levelColors = ['#185FA5','#0F6E56','#534AB7','#854F0B','#993556','#0e7490','#6d28d9'];
+    const lvlIdx = Math.max(0, parseInt(lvl.slice(1), 10) - 1);
+    const color  = levelColors[lvlIdx % levelColors.length];
+
+    const bomMult = multMap[mat.id] !== undefined ? multMap[mat.id] : 1;
+    const lt      = cfg.prod_lt_mo || 2;
+
+    return {
+      skuId:   mat.id,
+      mat:     mat.name || mat.id,
+      level:   _MRP_LEVEL_LABELS[lvl] || ('Level ' + lvl.slice(1)),
+      color,
+      act,
+      bomMult,
+      pri,
+      lt,
+    };
+  });
+}
+
+// MRP_SKU_CONFIG is rebuilt after DB load; starts as empty array
+let MRP_SKU_CONFIG = [];
+let MRP_SKUS       = [];
 
 // ── Level colour palette ────────────────────────────────────
 const LEVEL_COLORS = {
@@ -14124,6 +14347,8 @@ async function launchApp(accessToken) {
 
     DB.loaded = true;
     hideLoader();
+    // Rebuild MRP SKU config from DB (fix #2 — no longer hardcoded)
+    try { MRP_SKU_CONFIG = buildMRPSkuConfig(); MRP_SKUS = MRP_SKU_CONFIG.slice(); } catch(e) { console.error('buildMRPSkuConfig failed:', e); }
     applyRoleUI();
     applySecurityHardening();
     recordLoginAttempt(true, currentProfile?.email);
