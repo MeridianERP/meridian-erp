@@ -533,8 +533,24 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
   /* Side panel: full width on mobile */
   #side-panel { width: 100% !important; }
 
-  /* Plan tabs: horizontal scroll */
-  #mrp-tab-bar, #plan-tab-bar { overflow-x: auto; flex-wrap: nowrap; }
+  /* Plan tabs + MRP tabs: horizontal scroll, no wrap */
+  #mrp-tab-bar, #plan-tab-bar { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+
+  /* MRP table wrapper: always scrollable */
+  #mrp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #mrp-table { min-width: 700px; }
+
+  /* MRP SKU info strip: scroll horizontally */
+  #mrp-sku-strip { overflow-x: auto; flex-wrap: nowrap; }
+
+  /* Planning table: scrollable */
+  .plan-tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Reports exec dashboard: single column cards */
+  #exec-dashboard-content > div { grid-template-columns: 1fr !important; }
+
+  /* Topbar actions: hide export button on very small screens to save space */
+  .tb-actions .btn-secondary { display: none; }
 
   /* KPI font size: slightly smaller */
   .kpi-val { font-size: 18px !important; }
@@ -544,6 +560,9 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 
   /* Hide less critical table columns on mobile via utility class */
   .hide-mobile { display: none !important; }
+
+  /* Net status pill: smaller on mobile */
+  #net-status { font-size: 11px !important; padding: 3px 8px !important; }
 }
 
 /* ── Small phone breakpoint ── */
@@ -552,6 +571,12 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
   .content { padding: 10px; }
   .kpi { padding: 10px 12px; }
   .kpi-val { font-size: 16px !important; }
+  /* Stack topbar vertically on very small phones */
+  .topbar { flex-wrap: wrap; height: auto; min-height: 56px; padding-top: 10px; padding-bottom: 10px; }
+  .tb-space { display: none; }
+  /* MRP run button: compact */
+  #run-mrp-wrap { width: 100%; margin-top: 6px; }
+  #run-mrp-wrap button:first-child { flex: 1; }
 }
 
 </style>
@@ -842,6 +867,8 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
       <div id="env-banner" style="display:none"></div>
     </div>
     <div class="tb-space"></div>
+    <!-- Network status pill — shown when offline or a request is in-flight -->
+    <div id="net-status" style="display:none;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;margin-right:8px"></div>
     <div class="tb-actions">
       <button class="btn btn-secondary btn-sm" onclick="showToast('Exporting data…')">↓ Export</button>
       <button class="btn btn-primary btn-sm" id="cta-btn" onclick="handleCTA()">+ Add Item</button>
@@ -3279,12 +3306,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Network status monitoring — notify user if connection drops mid-session
-  window.addEventListener('offline', () => {
-    showToast('⚠ No internet connection — changes may not save until you reconnect.');
-  });
-  window.addEventListener('online', () => {
-    showToast('✓ Connection restored.');
-  });
+  let _netStatusTimer = null;
+  function showNetStatus(msg, type) {
+    // type: 'offline' | 'saving' | 'ok'
+    const el = document.getElementById('net-status');
+    if (!el) return;
+    clearTimeout(_netStatusTimer);
+    if (type === 'offline') {
+      el.style.display = 'flex';
+      el.style.background = '#fef2f2'; el.style.color = '#991b1b'; el.style.border = '1px solid #fca5a5';
+      el.innerHTML = '⚠ ' + msg;
+    } else if (type === 'saving') {
+      el.style.display = 'flex';
+      el.style.background = '#fffbeb'; el.style.color = '#92400e'; el.style.border = '1px solid #fcd34d';
+      el.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border:2px solid #d97706;border-top-color:transparent;border-radius:50%;animation:sb-spin .7s linear infinite;margin-right:2px"></span>' + msg;
+    } else {
+      el.style.display = 'flex';
+      el.style.background = '#f0fdf4'; el.style.color = '#166534'; el.style.border = '1px solid #86efac';
+      el.innerHTML = '✓ ' + msg;
+      _netStatusTimer = setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+  }
+  window.addEventListener('offline', () => showNetStatus('No internet connection', 'offline'));
+  window.addEventListener('online',  () => showNetStatus('Connection restored', 'ok'));
 });
 
 // ── Apply role-based UI restrictions ──────
@@ -3628,6 +3672,8 @@ async function sb(table, opts = {}) {
   const timeoutMs = (method === 'GET') ? 20000 : 15000;
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), timeoutMs);
+  // Show saving indicator for writes (not GET — too noisy)
+  if (method !== 'GET' && typeof showNetStatus === 'function') showNetStatus('Saving…', 'saving');
 
   const fetchOpts = {
     method,
@@ -3647,11 +3693,14 @@ async function sb(table, opts = {}) {
   } catch(fetchErr) {
     clearTimeout(timeoutId);
     if (fetchErr.name === 'AbortError') {
+      if (typeof showNetStatus === 'function') showNetStatus('Request timed out', 'offline');
       throw new Error('Request timed out — Supabase took too long to respond. Check your connection and try again.');
     }
+    if (typeof showNetStatus === 'function') showNetStatus('No connection', 'offline');
     throw new Error('Network error — could not reach Supabase. Check your connection.');
   }
   clearTimeout(timeoutId);
+  if (method !== 'GET' && res.ok && typeof showNetStatus === 'function') showNetStatus('Saved', 'ok');
   if (res.status === 401) {
     // JWT expired mid-session — refresh token and retry once
     _accessToken = ''; _tokenExpiresAt = 0;
@@ -3805,7 +3854,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: FIX2-3-4-v2 | Unified invite | Magic-link email | Reset PW in Users table');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v1 | COGS validation | Net status indicator | Mobile improvements');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -12845,6 +12894,19 @@ function renderExecDashboard() {
   var getCost = function(id){var s=DB.skus.find(function(x){return x.id===id;});return s&&s.unit_cost!=null?s.unit_cost:null;};
   var getSell = function(id){var s=DB.skus.find(function(x){return x.id===id;});return s&&s.selling_price!=null?s.selling_price:null;};
   var hasCosts = DB.skus.length > 0 && DB.skus.every(function(s){return s.unit_cost!=null && s.unit_cost > 0;});
+
+  // ── Detailed cost validation — identify exactly which SKUs are missing costs ──
+  var missingUnitCost    = DB.skus.filter(function(s){ return !s.unit_cost || s.unit_cost <= 0; });
+  var missingSellingPrice= DB.skus.filter(function(s){ return s.level === 'Level 1' && (!s.selling_price || s.selling_price <= 0); });
+  var costWarnings = [];
+  if (missingUnitCost.length > 0) {
+    costWarnings.push({ type:'unit_cost', skus: missingUnitCost,
+      label:'CMO/unit cost missing', desc:'Required for inventory valuation and COGS' });
+  }
+  if (missingSellingPrice.length > 0) {
+    costWarnings.push({ type:'selling_price', skus: missingSellingPrice,
+      label:'Selling price missing on FG', desc:'Required for revenue and margin calculations' });
+  }
   var today = new Date();
   var inDays = function(d,n){var t=new Date(d);return !isNaN(t)&&(t-today)/86400000<=n;};
   var fmtM = function(n){if(n==null||isNaN(n))return'\u2014';var a=Math.abs(n);return(n<0?'-':'')+(a>=1e6?'$'+(a/1e6).toFixed(2)+'M':a>=1e3?'$'+(a/1e3).toFixed(1)+'k':'$'+a.toFixed(2));};
@@ -13124,13 +13186,26 @@ function renderExecDashboard() {
     'WHAT: Value of released stock held above the safety buffer threshold.\nHOW: Excess qty = Released stock − (MOQ × 1.5). Excess value = excess qty × CMO cost per unit. SKUs with no MOQ set are excluded.\nACTION: High excess values indicate potential write-off risk or overprocurement.'
   );
 
-  // ── No-cost banner ─────────────────────────────────────────────
-  var banner = !hasCosts
-    ? '<div style="background:#fffbeb;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">'
-      +'<span style="font-size:20px">&#x26A0;&#xFE0F;</span>'
-      +'<div><div style="font-size:13px;font-weight:600;color:#F59E0B">Unit costs not configured</div>'
-      +'<div style="font-size:12px;color:#64748b;margin-top:2px">Go to SKU Master &#x2192; Edit each SKU &#x2192; set CMO/Supplier Cost to unlock all financial metrics.</div></div></div>'
-    : '';
+  // ── Cost validation banner — per-SKU detail with direct edit links ──────────
+  var banner = '';
+  if (costWarnings.length > 0) {
+    var warnRows = costWarnings.map(function(w) {
+      var skuLinks = w.skus.map(function(s) {
+        return '<span onclick="showView(\'skumaster\',document.getElementById(\'nav-skumaster\'));setTimeout(function(){openEditSKU(\'' + s.id + '\')},300)" '
+          + 'style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #fcd34d;border-radius:4px;padding:2px 8px;font-size:11.5px;font-weight:600;color:#92400e;margin:2px">'
+          + s.id + ' <span style="font-size:10px;opacity:.7">→ edit</span></span>';
+      }).join('');
+      return '<div style="margin-bottom:8px">'
+        + '<div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:4px">⚠ ' + w.label + ' — ' + w.desc + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:2px">' + skuLinks + '</div>'
+        + '</div>';
+    }).join('');
+    banner = '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;margin-bottom:20px">'
+      + '<div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px">💰 Cost configuration incomplete — some financial metrics are unavailable</div>'
+      + warnRows
+      + '<div style="font-size:11.5px;color:#92400e;margin-top:6px">Click any SKU above to open its edit panel directly.</div>'
+      + '</div>';
+  }
 
   // ── Section 8: Months Forward Coverage ───────────────────────────────────
   // Coverage = Released inventory ÷ avg of next 3 months forward demand
@@ -14293,7 +14368,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: FIX2-3-4-v2 | Unified invite | Magic-link email | Reset PW in Users table');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v1 | COGS validation | Net status indicator | Mobile improvements');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
