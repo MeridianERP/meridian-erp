@@ -2047,8 +2047,7 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 
       <div class="info-box" style="margin-bottom:16px">
         <strong>Admin only.</strong> Role changes take effect on next login.
-        To invite new users or reset passwords, use the
-        <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">Supabase Dashboard → Authentication → Users</a>.
+        Use <strong>+ Invite User</strong> to send a secure sign-in link by email. Use <strong>↺ Reset PW</strong> on any row to send a password reset email.
       </div>
 
       <div class="filter-row">
@@ -3535,30 +3534,43 @@ async function inviteUser() {
   btn.disabled = true; btn.textContent = 'Sending…';
 
   try {
-    // Step 1: Create the user account via signUp (email-confirm flow).
-    // Supabase will send a confirmation / magic-link email automatically
-    // when email confirmations are enabled in the Auth settings.
-    // The redirectTo lands back on this app so the set-password screen fires.
     const redirectTo = window.location.origin + window.location.pathname;
+
+    // Step 1: Create the account with a random password the user never sees.
+    // We suppress the signUp confirmation email (it may or may not fire depending
+    // on Supabase settings) and instead always send a magic link in Step 2.
     const res = await fetch(SB_URL + '/auth/v1/signup', {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
         password: crypto.getRandomValues(new Uint8Array(24))
-          .reduce((s,b)=>s+(b%36).toString(36),'') + 'Aa1!', // strong random — user never sees it
+          .reduce((s,b) => s + (b % 36).toString(36), '') + 'Aa1!',
         data: { full_name: name || email },
-        options: { emailRedirectTo: redirectTo }
       })
     });
     const data = await res.json();
+    // Allow "User already registered" — means we can still send a magic link below
+    if (!res.ok && !data.msg?.includes('already registered') && !data.error_description?.includes('already registered')) {
+      throw new Error(data.error_description || data.msg || 'Could not create account');
+    }
 
-    // Step 2: As soon as the user row exists, patch their profile role.
-    // We do this immediately (user_profiles row is created by DB trigger).
+    // Step 2: Send a magic link — this always fires an email regardless of
+    // Supabase "confirm email" settings, and the link lands on the set-password screen.
+    const mlRes = await fetch(SB_URL + '/auth/v1/magiclink', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, options: { emailRedirectTo: redirectTo } })
+    });
+    if (!mlRes.ok) {
+      const mlErr = await mlRes.json().catch(() => ({}));
+      throw new Error(mlErr.error_description || mlErr.msg || 'Could not send invitation email');
+    }
+
+    // Step 3: Patch the profile role (trigger creates the row, so slight delay)
     const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
     const userId  = data.user?.id;
     if (userId && session.access_token) {
-      // Brief delay to let the DB trigger fire and create the profile row
       setTimeout(async () => {
         await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
           method: 'PATCH',
@@ -3574,13 +3586,12 @@ async function inviteUser() {
     }
 
     closeModal('modal-invite');
-    // Reset fields
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-name').value  = '';
     document.getElementById('invite-role').value  = 'viewer';
 
     showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
-    setTimeout(() => openUserMgmt(), 2500);
+    setTimeout(() => renderUsersView(), 2500);
 
   } catch(e) {
     errEl.textContent = 'Error: ' + (e.message || 'Could not send invitation. Please try again.');
@@ -3794,7 +3805,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: FIX2-3-4-v1 | MRP config dynamic | Forgot PW | Magic-link invite');
+    console.log('MERIDIAN VERSION: FIX2-3-4-v2 | Unified invite | Magic-link email | Reset PW in Users table');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -3936,7 +3947,7 @@ function handleCTA() {
   if (v === 'testsuite') { runAllTests(); return; }
   if (v === 'scenarios') { openNewScenarioPanel(); return; }
   if (v === 'clinical')  { startNewTrial(); return; }
-  if (v === 'users')     { openInviteInfo(); return; }
+  if (v === 'users')     { openModal('modal-invite'); return; }
   if (v === 'qc')        { openQCReviewPanel(); return; }
   if (v === 'alerts')    { computeAlerts(); renderAlertsView(); renderAlertDropdown(); return; }
   if (v === 'locations') { openAddLocationPanel(); return; }
@@ -5267,7 +5278,7 @@ function renderUsersView(search = '') {
       <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:${active?'var(--green-lt)':'var(--bg2)'};color:${active?'var(--green)':'var(--text3)'}">${active?'Active':'Inactive'}</span></td>
       <td style="font-size:12px;color:var(--text3)">${lastLogin}</td>
       <td style="font-size:12px;color:var(--text3)">${invitedBy}</td>
-      <td>${!isSelf?`<button class="btn btn-ghost btn-xs" onclick="_toggleUserByIdx(${i})">${active?'Deactivate':'Reactivate'}</button>`:''}</td>
+      <td>${!isSelf?`<button class="btn btn-ghost btn-xs" style="margin-right:4px" onclick="adminSendPasswordReset('${u.email}')" title="Send password reset email">↺ Reset PW</button><button class="btn btn-ghost btn-xs" onclick="_toggleUserByIdx(${i})">${active?'Deactivate':'Reactivate'}</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -5337,29 +5348,8 @@ async function reactivateUser(userId, email) {
 }
 
 function openInviteInfo() {
-  const body = `
-    ${spSection('Invite New User')}
-    <div style="background:var(--bg);border-radius:var(--radius);padding:14px;margin-bottom:14px;font-size:13px;line-height:1.6">
-      To invite a new user to Meridian ERP:
-      <ol style="margin:10px 0 0 16px;padding:0">
-        <li>Go to your <a href="https://supabase.com/dashboard/project/kfokqhhvuydqvxtpvlug/auth/users" target="_blank" style="color:var(--accent)">Supabase Dashboard → Authentication → Users</a></li>
-        <li>Click <strong>Invite user</strong> and enter their email</li>
-        <li>They will receive an invite link to set their password</li>
-        <li>Once they log in, come back here to set their <strong>Role</strong> (defaults to Viewer)</li>
-      </ol>
-    </div>
-
-    ${spSection('Password Reset')}
-    <div style="background:var(--bg);border-radius:var(--radius);padding:14px;font-size:13px;line-height:1.6">
-      To reset a user's password:
-      <ol style="margin:10px 0 0 16px;padding:0">
-        <li>Go to <a href="https://supabase.com/dashboard/project/kfokqhhvuydqvxtpvlug/auth/users" target="_blank" style="color:var(--accent)">Supabase Dashboard → Authentication → Users</a></li>
-        <li>Find the user and click <strong>Send password reset</strong></li>
-      </ol>
-    </div>
-  `;
-  const footer = `<button class="btn btn-secondary" onclick="closeSidePanel()">Close</button>`;
-  openSidePanel('Invite & Password Reset', 'Manage via Supabase Dashboard', body, footer);
+  // Now handled in-app — just open the invite modal directly
+  openModal('modal-invite');
 }
 
 // Update last_login on successful auth
@@ -14303,7 +14293,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: FIX2-3-4-v1 | MRP config dynamic | Forgot PW | Magic-link invite');
+    console.log('MERIDIAN VERSION: FIX2-3-4-v2 | Unified invite | Magic-link email | Reset PW in Users table');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
