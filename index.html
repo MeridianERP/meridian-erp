@@ -14303,6 +14303,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
+    console.log('MERIDIAN VERSION: FIX2-3-4-v1 | MRP config dynamic | Forgot PW | Magic-link invite');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
