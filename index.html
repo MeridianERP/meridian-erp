@@ -560,9 +560,6 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
 
   /* Hide less critical table columns on mobile via utility class */
   .hide-mobile { display: none !important; }
-
-  /* Net status pill: smaller on mobile */
-  #net-status { font-size: 11px !important; padding: 3px 8px !important; }
 }
 
 /* ── Small phone breakpoint ── */
@@ -868,7 +865,7 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
     </div>
     <div class="tb-space"></div>
     <!-- Network status pill — shown when offline or a request is in-flight -->
-    <div id="net-status" style="display:none;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;margin-right:8px"></div>
+    <div id="net-status" style="display:none;position:fixed;bottom:72px;right:20px;z-index:9999;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.15)"></div>
     <div class="tb-actions">
       <button class="btn btn-secondary btn-sm" onclick="showToast('Exporting data…')">↓ Export</button>
       <button class="btn btn-primary btn-sm" id="cta-btn" onclick="handleCTA()">+ Add Item</button>
@@ -3854,7 +3851,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: FIX5-6-7-v1 | COGS validation | Net status indicator | Mobile improvements');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -14368,7 +14365,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: FIX5-6-7-v1 | COGS validation | Net status indicator | Mobile improvements');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
