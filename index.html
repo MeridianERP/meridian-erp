@@ -3535,30 +3535,57 @@ async function updateUserRole(userId, role) {
 }
 
 // ── Admin: send password reset email to a user ───────────────
+// ── Helper: call admin-operations Edge Function ──────────────
+async function callAdminOp(action, payload) {
+  const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
+  const res = await fetch(SB_URL + '/functions/v1/admin-operations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (session.access_token || _accessToken || SB_KEY),
+      'apikey': SB_KEY,
+    },
+    body: JSON.stringify({ action, payload })
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || 'Admin operation failed');
+  return data;
+}
+
 async function adminSendPasswordReset(email) {
   if (!confirm(`Send a password reset email to ${email}?`)) return;
   try {
     const redirectTo = window.location.origin + window.location.pathname;
-    await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: redirectTo });
+    await callAdminOp('reset_password', { email, redirectTo });
     showToast(`Password reset email sent to ${email}`);
   } catch(e) {
-    showToast('Error sending reset email: ' + e.message);
+    // Fallback to direct auth if Edge Function unavailable
+    try {
+      await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: window.location.origin + window.location.pathname });
+      showToast(`Password reset email sent to ${email}`);
+    } catch(e2) { showToast('Error sending reset email: ' + e2.message); }
   }
 }
 
 async function removeUser(userId, email) {
-  if (!confirm(`Remove ${email} from the system?`)) return;
+  if (!confirm(`Permanently delete ${email} from the system? This cannot be undone.`)) return;
   try {
-    // Delete profile — auth user deletion requires service role key, so we just deactivate
-    const session = JSON.parse(safeStorage.getItem('sb-session'));
-    await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
-      method: 'PATCH',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'viewer', full_name: '[Removed]' })
-    });
-    showToast(email + ' access revoked');
-    openUserMgmt(); // refresh list
-  } catch(e) { showToast('Error: ' + e.message); }
+    await callAdminOp('delete_user', { userId });
+    showToast(email + ' has been deleted');
+    setTimeout(() => renderUsersView(), 1000);
+  } catch(e) {
+    // Fallback: deactivate only (no service role available)
+    try {
+      const session = JSON.parse(safeStorage.getItem('sb-session'));
+      await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
+        method: 'PATCH',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'viewer', full_name: '[Removed]', is_active: false })
+      });
+      showToast(email + ' access revoked');
+      setTimeout(() => renderUsersView(), 1000);
+    } catch(e2) { showToast('Error: ' + e2.message); }
+  }
 }
 
 async function inviteUser() {
@@ -3577,66 +3604,49 @@ async function inviteUser() {
   try {
     const redirectTo = window.location.origin + window.location.pathname;
 
-    // Step 1: Create the account with a random password the user never sees.
-    // We suppress the signUp confirmation email (it may or may not fire depending
-    // on Supabase settings) and instead always send a magic link in Step 2.
-    const res = await fetch(SB_URL + '/auth/v1/signup', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password: crypto.getRandomValues(new Uint8Array(24))
-          .reduce((s,b) => s + (b % 36).toString(36), '') + 'Aa1!',
-        data: { full_name: name || email },
-      })
-    });
-    const data = await res.json();
-    // Allow "User already registered" — means we can still send a magic link below
-    if (!res.ok && !data.msg?.includes('already registered') && !data.error_description?.includes('already registered')) {
-      throw new Error(data.error_description || data.msg || 'Could not create account');
-    }
-
-    // Step 2: Send a magic link — this always fires an email regardless of
-    // Supabase "confirm email" settings, and the link lands on the set-password screen.
-    const mlRes = await fetch(SB_URL + '/auth/v1/magiclink', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, options: { emailRedirectTo: redirectTo } })
-    });
-    if (!mlRes.ok) {
-      const mlErr = await mlRes.json().catch(() => ({}));
-      throw new Error(mlErr.error_description || mlErr.msg || 'Could not send invitation email');
-    }
-
-    // Step 3: Patch the profile role (trigger creates the row, so slight delay)
-    const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
-    const userId  = data.user?.id;
-    if (userId && session.access_token) {
-      setTimeout(async () => {
-        await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
-          method: 'PATCH',
-          headers: {
-            'apikey': SB_KEY,
-            'Authorization': 'Bearer ' + session.access_token,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({ role, full_name: name || email, invited_by: currentProfile?.email || null })
-        }).catch(() => {});
-      }, 2000);
-    }
+    // Use Edge Function (official inviteUserByEmail with service role)
+    await callAdminOp('invite_user', { email, role, full_name: name || email, redirectTo });
 
     closeModal('modal-invite');
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-name').value  = '';
     document.getElementById('invite-role').value  = 'viewer';
-
     showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
     setTimeout(() => renderUsersView(), 2500);
 
   } catch(e) {
-    errEl.textContent = 'Error: ' + (e.message || 'Could not send invitation. Please try again.');
-    errEl.style.display = 'block';
+    // Fallback to magic link approach if Edge Function unavailable
+    try {
+      const redirectTo = window.location.origin + window.location.pathname;
+      const res = await fetch(SB_URL + '/auth/v1/signup', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password: crypto.getRandomValues(new Uint8Array(24)).reduce((s,b) => s + (b % 36).toString(36), '') + 'Aa1!',
+          data: { full_name: name || email },
+        })
+      });
+      const data = await res.json();
+      if (!res.ok && !data.msg?.includes('already registered') && !data.error_description?.includes('already registered')) {
+        throw new Error(data.error_description || data.msg || 'Could not create account');
+      }
+      const mlRes = await fetch(SB_URL + '/auth/v1/magiclink', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, options: { emailRedirectTo: redirectTo } })
+      });
+      if (!mlRes.ok) throw new Error('Could not send invitation email');
+      closeModal('modal-invite');
+      document.getElementById('invite-email').value = '';
+      document.getElementById('invite-name').value  = '';
+      document.getElementById('invite-role').value  = 'viewer';
+      showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
+      setTimeout(() => renderUsersView(), 2500);
+    } catch(e2) {
+      errEl.textContent = 'Error: ' + (e2.message || 'Could not send invitation. Please try again.');
+      errEl.style.display = 'block';
+    }
   } finally {
     btn.disabled = false; btn.textContent = 'Send Invitation';
   }
@@ -3851,7 +3861,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v3 | Edge Function admin ops');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -14365,7 +14375,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
+    console.log('MERIDIAN VERSION: FIX5-6-7-v3 | Edge Function admin ops');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
