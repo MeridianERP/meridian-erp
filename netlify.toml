@@ -1,0 +1,37 @@
+# ── Netlify configuration — Meridian ERP ─────────────────────
+# Deploy settings
+[build]
+  publish = "."
+
+# ── Security headers (applied to all routes) ─────────────────
+[[headers]]
+  for = "/*"
+  [headers.values]
+
+    # Prevent clickjacking — stops the app being embedded in iframes
+    X-Frame-Options = "DENY"
+
+    # Prevent MIME-type sniffing
+    X-Content-Type-Options = "nosniff"
+
+    # Force HTTPS for 1 year, include subdomains
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+
+    # Control referrer information sent to third parties
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    # Restrict browser features
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+
+    # Content Security Policy
+    # - default-src: only allow resources from same origin
+    # - script-src: allow same origin + CDN libraries used by the app
+    # - connect-src: allow Supabase API calls
+    # - style-src: allow same origin + inline styles (needed for dynamic styling)
+    # - font-src: allow Google Fonts and same origin
+    # - img-src: allow same origin and data URIs
+    # - frame-ancestors: block all framing (belt-and-suspenders with X-Frame-Options)
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https://*.supabase.co https://api.anthropic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+
+    # XSS protection (legacy browsers)
+    X-XSS-Protection = "1; mode=block"
