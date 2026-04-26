@@ -635,6 +635,80 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
   </div>
 </div>
 
+<!-- INTERIM ANALYSIS MODAL -->
+<div class="modal-overlay" id="modal-interim">
+  <div class="modal" style="width:520px">
+    <div class="mhead"><span class="mtitle">🔬 Interim Analysis Scenario</span><button class="mclose" onclick="closeModal('modal-interim')">×</button></div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:#1e40af">
+      An interim analysis is a pre-planned review of efficacy/safety data mid-trial. The outcome can stop the trial early, expand it, or continue unchanged. This models the probability-weighted drug demand impact.
+    </div>
+
+    <div class="fg"><label class="fl">Interim Analysis Timing</label>
+      <select class="fi" id="interim-timing">
+        <option value="0.33">After 33% of patients reach primary endpoint (early)</option>
+        <option value="0.5" selected>After 50% of patients reach primary endpoint (standard)</option>
+        <option value="0.75">After 75% of patients reach primary endpoint (late)</option>
+        <option value="custom">Custom — specify month</option>
+      </select>
+    </div>
+    <div class="fg" id="interim-custom-month-wrap" style="display:none">
+      <label class="fl">Interim at Month</label>
+      <input class="fi" type="number" id="interim-custom-month" value="8" min="1" placeholder="e.g. 8">
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin:16px 0 10px;color:var(--text)">Possible Outcomes & Probabilities</div>
+    <div style="background:var(--bg2);border-radius:8px;padding:14px;margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#059669">✅ Early Stop — Efficacy</div>
+          <div style="font-size:11.5px;color:var(--text3)">Drug works better than expected. Trial stops. Remaining supply = waste.</div>
+        </div>
+        <div><input class="fi" type="number" id="interim-p-efficacy" value="20" min="0" max="100" style="text-align:right" onchange="interimCheckProbs()">%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#dc2626">❌ Early Stop — Futility</div>
+          <div style="font-size:11.5px;color:var(--text3)">Insufficient efficacy signal. Trial stops early. Remaining supply = waste.</div>
+        </div>
+        <div><input class="fi" type="number" id="interim-p-futility" value="15" min="0" max="100" style="text-align:right" onchange="interimCheckProbs()">%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#f59e0b">⚠️ Early Stop — Safety</div>
+          <div style="font-size:11.5px;color:var(--text3)">Serious adverse events. Trial stops immediately. Remaining supply = waste.</div>
+        </div>
+        <div><input class="fi" type="number" id="interim-p-safety" value="5" min="0" max="100" style="text-align:right" onchange="interimCheckProbs()">%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#7c3aed">📈 Sample Size Increase</div>
+          <div style="font-size:11.5px;color:var(--text3)">Higher variance observed. Additional patients added.</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span style="font-size:11.5px;color:var(--text3)">Add</span>
+            <input class="fi" type="number" id="interim-extra-pts" value="30" min="0" style="width:60px;padding:3px 6px;font-size:12px">
+            <span style="font-size:11.5px;color:var(--text3)">patients</span>
+          </div>
+        </div>
+        <div><input class="fi" type="number" id="interim-p-expand" value="20" min="0" max="100" style="text-align:right" onchange="interimCheckProbs()">%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1e40af">▶️ Continue Unchanged</div>
+          <div style="font-size:11.5px;color:var(--text3)">No action — trial proceeds as planned.</div>
+        </div>
+        <div><input class="fi" type="number" id="interim-p-continue" value="40" min="0" max="100" style="text-align:right;background:var(--bg)" readonly>%</div>
+      </div>
+    </div>
+    <div id="interim-prob-warning" style="display:none;color:var(--red);font-size:12px;margin-top:6px">⚠ Probabilities must sum to 100%</div>
+    <div id="interim-prob-ok" style="color:#059669;font-size:12px;margin-top:6px">✓ Probabilities sum to 100%</div>
+
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-interim')">Cancel</button>
+      <button class="btn btn-primary" onclick="runInterimAnalysis()">Run Interim Analysis →</button>
+    </div>
+  </div>
+</div>
+
 <!-- INVITE USER MODAL -->
 <div class="modal-overlay" id="modal-invite">
   <div class="modal" style="width:440px">
@@ -3535,30 +3609,57 @@ async function updateUserRole(userId, role) {
 }
 
 // ── Admin: send password reset email to a user ───────────────
+// ── Helper: call admin-operations Edge Function ──────────────
+async function callAdminOp(action, payload) {
+  const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
+  const res = await fetch(SB_URL + '/functions/v1/admin-operations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (session.access_token || _accessToken || SB_KEY),
+      'apikey': SB_KEY,
+    },
+    body: JSON.stringify({ action, payload })
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || 'Admin operation failed');
+  return data;
+}
+
 async function adminSendPasswordReset(email) {
   if (!confirm(`Send a password reset email to ${email}?`)) return;
   try {
     const redirectTo = window.location.origin + window.location.pathname;
-    await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: redirectTo });
+    await callAdminOp('reset_password', { email, redirectTo });
     showToast(`Password reset email sent to ${email}`);
   } catch(e) {
-    showToast('Error sending reset email: ' + e.message);
+    // Fallback to direct auth if Edge Function unavailable
+    try {
+      await sbAuth('recover', { email, gotrue_meta_security: {}, redirect_to: window.location.origin + window.location.pathname });
+      showToast(`Password reset email sent to ${email}`);
+    } catch(e2) { showToast('Error sending reset email: ' + e2.message); }
   }
 }
 
 async function removeUser(userId, email) {
-  if (!confirm(`Remove ${email} from the system?`)) return;
+  if (!confirm(`Permanently delete ${email} from the system? This cannot be undone.`)) return;
   try {
-    // Delete profile — auth user deletion requires service role key, so we just deactivate
-    const session = JSON.parse(safeStorage.getItem('sb-session'));
-    await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
-      method: 'PATCH',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'viewer', full_name: '[Removed]' })
-    });
-    showToast(email + ' access revoked');
-    openUserMgmt(); // refresh list
-  } catch(e) { showToast('Error: ' + e.message); }
+    await callAdminOp('delete_user', { userId });
+    showToast(email + ' has been deleted');
+    setTimeout(() => renderUsersView(), 1000);
+  } catch(e) {
+    // Fallback: deactivate only (no service role available)
+    try {
+      const session = JSON.parse(safeStorage.getItem('sb-session'));
+      await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
+        method: 'PATCH',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'viewer', full_name: '[Removed]', is_active: false })
+      });
+      showToast(email + ' access revoked');
+      setTimeout(() => renderUsersView(), 1000);
+    } catch(e2) { showToast('Error: ' + e2.message); }
+  }
 }
 
 async function inviteUser() {
@@ -3577,66 +3678,49 @@ async function inviteUser() {
   try {
     const redirectTo = window.location.origin + window.location.pathname;
 
-    // Step 1: Create the account with a random password the user never sees.
-    // We suppress the signUp confirmation email (it may or may not fire depending
-    // on Supabase settings) and instead always send a magic link in Step 2.
-    const res = await fetch(SB_URL + '/auth/v1/signup', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password: crypto.getRandomValues(new Uint8Array(24))
-          .reduce((s,b) => s + (b % 36).toString(36), '') + 'Aa1!',
-        data: { full_name: name || email },
-      })
-    });
-    const data = await res.json();
-    // Allow "User already registered" — means we can still send a magic link below
-    if (!res.ok && !data.msg?.includes('already registered') && !data.error_description?.includes('already registered')) {
-      throw new Error(data.error_description || data.msg || 'Could not create account');
-    }
-
-    // Step 2: Send a magic link — this always fires an email regardless of
-    // Supabase "confirm email" settings, and the link lands on the set-password screen.
-    const mlRes = await fetch(SB_URL + '/auth/v1/magiclink', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, options: { emailRedirectTo: redirectTo } })
-    });
-    if (!mlRes.ok) {
-      const mlErr = await mlRes.json().catch(() => ({}));
-      throw new Error(mlErr.error_description || mlErr.msg || 'Could not send invitation email');
-    }
-
-    // Step 3: Patch the profile role (trigger creates the row, so slight delay)
-    const session = JSON.parse(safeStorage.getItem('sb-session') || '{}');
-    const userId  = data.user?.id;
-    if (userId && session.access_token) {
-      setTimeout(async () => {
-        await fetch(SB_URL + '/rest/v1/user_profiles?id=eq.' + userId, {
-          method: 'PATCH',
-          headers: {
-            'apikey': SB_KEY,
-            'Authorization': 'Bearer ' + session.access_token,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({ role, full_name: name || email, invited_by: currentProfile?.email || null })
-        }).catch(() => {});
-      }, 2000);
-    }
+    // Use Edge Function (official inviteUserByEmail with service role)
+    await callAdminOp('invite_user', { email, role, full_name: name || email, redirectTo });
 
     closeModal('modal-invite');
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-name').value  = '';
     document.getElementById('invite-role').value  = 'viewer';
-
     showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
     setTimeout(() => renderUsersView(), 2500);
 
   } catch(e) {
-    errEl.textContent = 'Error: ' + (e.message || 'Could not send invitation. Please try again.');
-    errEl.style.display = 'block';
+    // Fallback to magic link approach if Edge Function unavailable
+    try {
+      const redirectTo = window.location.origin + window.location.pathname;
+      const res = await fetch(SB_URL + '/auth/v1/signup', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password: crypto.getRandomValues(new Uint8Array(24)).reduce((s,b) => s + (b % 36).toString(36), '') + 'Aa1!',
+          data: { full_name: name || email },
+        })
+      });
+      const data = await res.json();
+      if (!res.ok && !data.msg?.includes('already registered') && !data.error_description?.includes('already registered')) {
+        throw new Error(data.error_description || data.msg || 'Could not create account');
+      }
+      const mlRes = await fetch(SB_URL + '/auth/v1/magiclink', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, options: { emailRedirectTo: redirectTo } })
+      });
+      if (!mlRes.ok) throw new Error('Could not send invitation email');
+      closeModal('modal-invite');
+      document.getElementById('invite-email').value = '';
+      document.getElementById('invite-name').value  = '';
+      document.getElementById('invite-role').value  = 'viewer';
+      showToast(`Invitation sent to ${email} — they'll receive a sign-in link by email.`);
+      setTimeout(() => renderUsersView(), 2500);
+    } catch(e2) {
+      errEl.textContent = 'Error: ' + (e2.message || 'Could not send invitation. Please try again.');
+      errEl.style.display = 'block';
+    }
   } finally {
     btn.disabled = false; btn.textContent = 'Send Invitation';
   }
@@ -3851,7 +3935,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
+    console.log('MERIDIAN VERSION: CLINICAL-v7 | Run-in calc fix');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -7183,7 +7267,7 @@ let _clinicalView='registry',_activeTrial=null,_builderStep=1,_draftTrial={},_dr
 
 const TRIAL_DESIGNS={
   double_blind_placebo:   {label:'Double-Blind Placebo-Controlled',arms:['Active','Placebo'],icon:'🔬',desc:'Patients receive active drug or matching placebo. Neither patient nor investigator knows which.'},
-  double_blind_comparator:{label:'Double-Blind Active Comparator',arms:['Active','Comparator'],icon:'⚖️',desc:'Active drug vs approved comparator. Common in confirmatory Phase III trials.'},
+  double_blind_comparator:{label:'Double-Blind Active Comparator',arms:['Active Drug','Active Comparator 1','Active Comparator 2'],icon:'⚖️',desc:'Active drug vs approved comparator. Common in confirmatory Phase III trials.'},
   open_label:             {label:'Open-Label Single Arm',arms:['Active'],icon:'💉',desc:'All patients receive active drug. No blinding. Common in Phase I FIH and rare disease.'},
   crossover:              {label:'Double-Blind Cross-Over',arms:['Sequence AB','Sequence BA'],icon:'🔄',desc:'Same patients receive both treatments in sequence. Reduces patient numbers needed.'},
   dose_escalation:        {label:'Dose Escalation (Phase I)',arms:['Cohort A','Cohort B','Cohort C'],icon:'📈',desc:'Sequential cohorts receive increasing doses. Separate cohort supply planning.'},
@@ -7198,10 +7282,29 @@ const ENROLMENT_CURVES={
 };
 
 const PHASE_DEFAULTS={
-  'Phase I':  {patients:24, enrolment_months:6, treatment_months:3, overage:30,dropout:5},
-  'Phase II': {patients:120,enrolment_months:12,treatment_months:6, overage:25,dropout:10},
-  'Phase III':{patients:400,enrolment_months:18,treatment_months:12,overage:20,dropout:15},
+  'Phase I':  {patients:24,  enrolment_months:6,  treatment_months:3,  overage:30, dropout:5,  screen_failure:20},
+  'Phase II': {patients:120, enrolment_months:12, treatment_months:6,  overage:25, dropout:10, screen_failure:25},
+  'Phase III':{patients:400, enrolment_months:18, treatment_months:12, overage:20, dropout:15, screen_failure:20},
 };
+
+// Dosing frequency options — multiplier = doses per day
+const DOSE_FREQUENCIES={
+  QD:   {label:'QD (Once Daily)',      mult:1},
+  BID:  {label:'BID (Twice Daily)',    mult:2},
+  TID:  {label:'TID (Three times/day)',mult:3},
+  QW:   {label:'QW (Once Weekly)',     mult:1/7},
+  Q2W:  {label:'Q2W (Every 2 Weeks)',  mult:1/14},
+  Q4W:  {label:'Q4W (Every 4 Weeks)',  mult:1/28},
+  CONT: {label:'Continuous (per day)', mult:1},
+};
+
+// Compute units dispensed per 28-day cycle for a drug entry
+// { dose_per_admin, frequency, cycle_days }
+function calcDosePerCycle(drug) {
+  const freq = DOSE_FREQUENCIES[drug.frequency] || DOSE_FREQUENCIES.QD;
+  const cycleDays = drug.cycle_days || 28;
+  return (drug.dose_per_admin || 0) * freq.mult * cycleDays;
+}
 
 function enrolmentWeights(months,curve){
   const m=parseInt(months)||12;
@@ -7215,41 +7318,139 @@ function enrolmentWeights(months,curve){
   return w;
 }
 
-function generateClinicalForecast(trial,arms,visits){
-  const start=new Date(trial.enrolment_start_date||new Date());
-  const totalMonths=(parseInt(trial.enrolment_months)||12)+(parseInt(trial.treatment_months)||6)+3;
-  const weights=enrolmentWeights(trial.enrolment_months,trial.enrolment_curve);
-  const totalPts=parseInt(trial.total_patients)||0;
-  const totalRatio=arms.reduce((s,a)=>s+(parseFloat(a.randomisation_ratio)||1),0);
-  const newEnrol=Array(totalMonths).fill(0);
-  for(let m=0;m<(parseInt(trial.enrolment_months)||12);m++)newEnrol[m]=totalPts*weights[m];
-  const rows=[];
-  arms.forEach(arm=>{
-    if(!arm.sku_id)return;
-    const ratio=(parseFloat(arm.randomisation_ratio)||1)/totalRatio;
-    const dose=parseFloat(arm.dose_per_visit)||0;
-    const overage=1+(parseFloat(arm.overage_pct)||25)/100;
-    const dropout=1-(parseFloat(trial.dropout_rate_pct)||10)/100;
-    const treatMo=parseInt(trial.treatment_months)||6;
-    const dispVisits=visits.filter(v=>v.drug_dispensed&&(!v.arm_id||v.arm_id===arm.id));
-    const vpm=dispVisits.length>0?dispVisits.length/treatMo:1;
-    for(let m=0;m<totalMonths;m++){
-      let active=0;
-      for(let e=0;e<=m;e++){if((m-e)<treatMo)active+=newEnrol[e]*ratio*dropout;}
-      const demand=Math.ceil(active*vpm*dose*overage);
-      if(demand>0){
-        const pd=new Date(start);pd.setMonth(pd.getMonth()+m);
-        // Set to last day of that month
-        const lastDay=new Date(pd.getFullYear(),pd.getMonth()+1,0);
-        // Use local date to avoid UTC timezone shift
-        const periodDate=`${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-        rows.push({sku_id:arm.sku_id,period_date:periodDate,demand_qty:demand,arm_name:arm.arm_name,month_index:m});
-      }
+// ── Enhanced forecast engine ─────────────────────────────────
+// Supports: multi-drug arms, dosing frequency, screen failure,
+// variable treatment duration
+function generateClinicalForecast(trial, arms, visits) {
+  const start      = new Date(trial.enrolment_start_date || new Date());
+  const enrolMo    = parseInt(trial.enrolment_months)  || 12;
+  const treatMoAvg = parseInt(trial.treatment_months)  || 6;
+  const screenFail = (parseFloat(trial.screen_failure_pct) || 0) / 100;
+  const dropout    = 1 - (parseFloat(trial.dropout_rate_pct) || 10) / 100;
+  const totalPts   = parseInt(trial.total_patients) || 0;
+  // Patients actually enrolled after screen failure
+  const enrolledPts = Math.ceil(totalPts / (1 - screenFail));
+
+  const totalMonths = enrolMo + treatMoAvg + 3;
+  const weights     = enrolmentWeights(enrolMo, trial.enrolment_curve);
+  const totalRatio  = arms.reduce((s, a) => s + (parseFloat(a.randomisation_ratio) || 1), 0);
+
+  // Build monthly new-enrolment array (already adjusted for screen failure)
+  const newEnrol = Array(totalMonths).fill(0);
+  for (let m = 0; m < enrolMo; m++) newEnrol[m] = enrolledPts * weights[m];
+
+  const rows = [];
+
+  arms.forEach(arm => {
+    const ratio    = (parseFloat(arm.randomisation_ratio) || 1) / totalRatio;
+    const overage  = 1 + (parseFloat(arm.overage_pct) || 25) / 100;
+
+    // ── Parse multi-drug config from arm.drugs JSON or notes field or fall back to legacy fields ──
+    let drugs = [];
+    if (arm.drugs) {
+      try { drugs = JSON.parse(arm.drugs); } catch(e) {}
     }
+    // Check notes field (DB storage path)
+    if (!drugs.length && arm.notes && arm.notes.startsWith('DRUGS:')) {
+      try { drugs = JSON.parse(arm.notes.slice(6)); } catch(e) {}
+    }
+    // Legacy single-drug fallback
+    if (!drugs.length && arm.sku_id) {
+      const freq = arm.dose_frequency || 'QD';
+      const dpa  = parseFloat(arm.dose_per_visit) || 0;
+      drugs = [{ sku_id: arm.sku_id, dose_per_admin: dpa, frequency: freq, cycle_days: 28 }];
+    }
+
+    drugs.forEach(drug => {
+      if (!drug.sku_id) return;
+      const unitsPerCycle = calcDosePerCycle(drug);
+      if (unitsPerCycle <= 0) return;
+
+      for (let m = 0; m < totalMonths; m++) {
+        let active = 0;
+        for (let e = 0; e <= m; e++) {
+          if ((m - e) < treatMoAvg) active += newEnrol[e] * ratio * dropout;
+        }
+        if (active <= 0) continue;
+
+        // Units per patient per month = unitsPerCycle × (28/cycle_days)
+        const cycleDays   = drug.cycle_days || 28;
+        const unitsPerMo  = unitsPerCycle * (28 / cycleDays);
+        const demand      = Math.ceil(active * unitsPerMo * overage);
+
+        if (demand > 0) {
+          // Use 1st of the start month + m months to avoid day-overflow (e.g. Jan31+1mo = Mar3)
+          const pd      = new Date(start.getFullYear(), start.getMonth() + m, 1);
+          const lastDay = new Date(pd.getFullYear(), pd.getMonth() + 1, 0);
+          const periodDate = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+          rows.push({
+            sku_id: drug.sku_id, period_date: periodDate,
+            demand_qty: demand, arm_name: arm.arm_name,
+            drug_label: drug.drug_label || drug.sku_id,
+            month_index: m,
+          });
+        }
+      }
+    });
   });
-  const agg={};
-  rows.forEach(r=>{const k=`${r.sku_id}|${r.period_date}`;if(!agg[k])agg[k]={sku_id:r.sku_id,period_date:r.period_date,demand_qty:0,arms:[]};agg[k].demand_qty+=r.demand_qty;agg[k].arms.push({arm:r.arm_name,qty:r.demand_qty});});
-  return{rows:Object.values(agg),detail:rows};
+
+  // ── Run-in period demand ─────────────────────────────────────
+  // If the visit schedule includes a dispensing visit before Day 0 (run-in),
+  // ALL screened patients (not just randomised) receive drug for the run-in period.
+  // This demand is spread across the enrolment months proportionally.
+  const runInVisits = (visits || []).filter(v => v.drug_dispensed && (parseInt(v.visit_day) || 0) < 0);
+  if (runInVisits.length > 0) {
+    // Run-in duration = abs(earliest negative visit day) in days → convert to fraction of 28-day cycle
+    const runInDays = Math.abs(Math.min(...runInVisits.map(v => parseInt(v.visit_day) || 0)));
+    const runInCycleFraction = runInDays / 28;
+    const screenedPts = Math.ceil(totalPts / (1 - screenFail)); // total screened inc. failures
+
+    arms.forEach(arm => {
+      let drugs = [];
+      if (arm.drugs) { try { drugs = JSON.parse(arm.drugs); } catch(e) {} }
+      if (!drugs.length && arm.notes && arm.notes.startsWith('DRUGS:')) { try { drugs = JSON.parse(arm.notes.slice(6)); } catch(e) {} }
+      if (!drugs.length && arm.sku_id) drugs = [{ sku_id: arm.sku_id, dose_per_admin: parseFloat(arm.dose_per_visit)||0, frequency:'QD', cycle_days:28 }];
+      const ratio  = (parseFloat(arm.randomisation_ratio) || 1) / totalRatio;
+      const overage = 1 + (parseFloat(arm.overage_pct) || 25) / 100;
+
+      drugs.forEach(drug => {
+        if (!drug.sku_id) return;
+        const unitsPerCycle = calcDosePerCycle(drug);
+        if (unitsPerCycle <= 0) return;
+
+        // Run-in demand per screened patient = units × run-in fraction
+        // All screened patients get run-in drug — split across arms proportionally
+        const runInPtsPerArm   = screenedPts / arms.length;
+        const totalRunInDemand = Math.ceil(runInPtsPerArm * unitsPerCycle * runInCycleFraction * overage);
+
+        // Spread total run-in demand across enrolment months using the same S-curve weights
+        for (let m = 0; m < enrolMo; m++) {
+          const monthRunInDemand = Math.ceil(totalRunInDemand * weights[m]);
+          if (monthRunInDemand <= 0) continue;
+          if (monthRunInDemand <= 0) continue;
+          const pd = new Date(start.getFullYear(), start.getMonth() + m, 1);
+          const lastDay = new Date(pd.getFullYear(), pd.getMonth() + 1, 0);
+          const periodDate = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+          rows.push({
+            sku_id: drug.sku_id, period_date: periodDate,
+            demand_qty: monthRunInDemand,
+            arm_name: arm.arm_name + ' (Run-in)',
+            drug_label: (drug.drug_label || drug.sku_id) + ' [Run-in]',
+            month_index: m,
+          });
+        }
+      });
+    });
+  }
+  const agg = {};
+  rows.forEach(r => {
+    const k = `${r.sku_id}|${r.period_date}`;
+    if (!agg[k]) agg[k] = { sku_id: r.sku_id, period_date: r.period_date, demand_qty: 0, arms: [] };
+    agg[k].demand_qty += r.demand_qty;
+    agg[k].arms.push({ arm: r.arm_name, drug: r.drug_label, qty: r.demand_qty });
+  });
+
+  return { rows: Object.values(agg), detail: rows };
 }
 
 function renderClinicalView(){
@@ -7356,7 +7557,14 @@ function loadTrialToBuilder(id){
   const t=(DB.clinical_trials||[]).find(x=>x.id===id);
   if(!t)return;
   _draftTrial={...t};
-  _draftArms=(DB.clinical_arms||[]).filter(a=>a.trial_id===id).map(a=>({...a}));
+  _draftArms=(DB.clinical_arms||[]).filter(a=>a.trial_id===id).map(a=>{
+    // Restore drugs JSON stored in notes field
+    let drugs = [];
+    if (a.notes && a.notes.startsWith('DRUGS:')) {
+      try { drugs = JSON.parse(a.notes.slice(6)); } catch(e) {}
+    }
+    return {...a, drugs: drugs.length ? JSON.stringify(drugs) : (a.sku_id ? JSON.stringify([{sku_id:a.sku_id,drug_label:a.sku_id,dose_per_admin:parseFloat(a.dose_per_visit)||0,frequency:'QD',cycle_days:28}]) : '[]')};
+  });
   _draftVisits=(DB.clinical_visits||[]).filter(v=>v.trial_id===id).map(v=>({...v}));
   _builderStep=1;
   _clinicalView='builder';
@@ -7392,18 +7600,76 @@ function selectDesign(k){
 function buildStep3(){
   const skuOpts=(DB.skus||[]).map(s=>{const m=(DB.materials||[]).find(x=>x.id===s.id);return`<option value="${s.id}">${s.id} — ${m?.name||s.id}</option>`;}).join('');
   const isDoseEsc=_draftTrial.trial_design==='dose_escalation';
-  const armRows=_draftArms.map((arm,i)=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-weight:700;font-size:14px">${arm.arm_type==='active'?'💊':arm.arm_type==='placebo'?'⚪':arm.arm_type==='comparator'?'⚖️':'📦'} ${arm.arm_name}</div>${_draftArms.length>1?`<button onclick="removeArm(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕ Remove</button>`:''}</div>
-    <div class="sp-row"><div class="fg"><label class="fl">Arm Name *</label><input class="fi" value="${arm.arm_name}" onchange="_draftArms[${i}].arm_name=this.value" placeholder="e.g. Active 200mg"></div><div class="fg"><label class="fl">Arm Type</label><select class="fi" onchange="_draftArms[${i}].arm_type=this.value">${['active','placebo','comparator','other'].map(t=>`<option value="${t}" ${arm.arm_type===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
-    <div class="sp-row"><div class="fg"><label class="fl">SKU (Drug Product) *</label><select class="fi" onchange="_draftArms[${i}].sku_id=this.value"><option value="">— Select SKU —</option>${skuOpts.replace(`value="${arm.sku_id}"`,`value="${arm.sku_id}" selected`)}</select></div><div class="fg"><label class="fl">Randomisation Ratio</label><input class="fi" type="number" value="${arm.randomisation_ratio||1}" min="1" step="1" onchange="_draftArms[${i}].randomisation_ratio=parseFloat(this.value)||1" placeholder="e.g. 2 for 2:1"></div></div>
-    <div class="sp-row"><div class="fg"><label class="fl">Dose per Visit (units)</label><input class="fi" type="number" value="${arm.dose_per_visit||''}" min="0" onchange="_draftArms[${i}].dose_per_visit=parseFloat(this.value)||0" placeholder="Units dispensed per visit"></div><div class="fg"><label class="fl">Overage % (buffer)</label><input class="fi" type="number" value="${arm.overage_pct||25}" min="0" max="100" onchange="_draftArms[${i}].overage_pct=parseFloat(this.value)||25"></div></div>
-    ${isDoseEsc?`<div class="sp-row"><div class="fg"><label class="fl">Cohort Size (patients)</label><input class="fi" type="number" value="${arm.cohort_size||6}" min="1" onchange="_draftArms[${i}].cohort_size=parseInt(this.value)||6"></div><div class="fg"><label class="fl">Dose Level Label</label><input class="fi" value="${arm.dose_label||''}" onchange="_draftArms[${i}].dose_label=this.value" placeholder="e.g. 10mg, 30mg, 100mg"></div></div>`:''}
-    </div>`).join('');
-  const ratio=_draftArms.length>1?_draftArms.map(a=>a.randomisation_ratio||1).join(':')+' ('+_draftArms.map(a=>a.arm_name).join(':')+')':'';
-  return`<div style="font-size:16px;font-weight:700;margin-bottom:8px">Step 3 — Treatment Arms</div>${ratio?`<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Randomisation ratio: <b>${ratio}</b></div>`:'<div style="margin-bottom:16px"></div>'}${armRows}<button onclick="addArm()" class="btn btn-ghost btn-sm" style="margin-top:4px">+ Add Arm</button>`;
+  const freqOpts=Object.entries(DOSE_FREQUENCIES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  const armRows=_draftArms.map((arm,i)=>{
+    let drugs=[];
+    if(arm.drugs){try{drugs=JSON.parse(arm.drugs);}catch(e){}}
+    if(!drugs.length&&arm.sku_id){drugs=[{sku_id:arm.sku_id,drug_label:arm.sku_id,dose_per_admin:parseFloat(arm.dose_per_visit)||0,frequency:arm.dose_frequency||'QD',cycle_days:28}];}
+    if(!drugs.length){drugs=[{sku_id:'',drug_label:'',dose_per_admin:0,frequency:'QD',cycle_days:28}];}
+    const drugRows=drugs.map((drug,di)=>`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:700;color:var(--accent)">💊 Drug ${di+1}${di===0?' (Primary)':' (Combination)'}</div>
+          ${drugs.length>1?`<button onclick="removeDrug(${i},${di})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">✕ Remove drug</button>`:''}
+        </div>
+        <div class="sp-row">
+          <div class="fg"><label class="fl">Drug Label</label><input class="fi" value="${drug.drug_label||''}" onchange="updateDrug(${i},${di},'drug_label',this.value)" placeholder="e.g. Encorafenib 300mg"></div>
+          <div class="fg"><label class="fl">SKU *</label><select class="fi" onchange="updateDrug(${i},${di},'sku_id',this.value)"><option value="">— Select SKU —</option>${skuOpts.replace(`value="${drug.sku_id}"`,`value="${drug.sku_id}" selected`)}</select></div>
+        </div>
+        <div class="sp-row">
+          <div class="fg"><label class="fl">Dose per Administration (units)</label><input class="fi" type="number" value="${drug.dose_per_admin||0}" min="0" onchange="updateDrug(${i},${di},'dose_per_admin',parseFloat(this.value)||0)" placeholder="e.g. 1"></div>
+          <div class="fg"><label class="fl">Dosing Frequency</label><select class="fi" onchange="updateDrug(${i},${di},'frequency',this.value)">${freqOpts.replace(`value="${drug.frequency||'QD'}"`,`value="${drug.frequency||'QD'}" selected`)}</select></div>
+        </div>
+        <div class="sp-row">
+          <div class="fg"><label class="fl">Cycle Length (days)</label><input class="fi" type="number" value="${drug.cycle_days||28}" min="1" onchange="updateDrug(${i},${di},'cycle_days',parseInt(this.value)||28)"></div>
+          <div class="fg"><label class="fl" style="color:var(--text3)">≈ Units per cycle (auto)</label><input class="fi" style="background:var(--bg);color:var(--text3)" readonly value="${Math.round(calcDosePerCycle(drug))} units/cycle"></div>
+        </div>
+      </div>`).join('');
+    return`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-weight:700;font-size:14px">${arm.arm_type==='active'?'💊':arm.arm_type==='placebo'?'⚪':arm.arm_type==='comparator'?'⚖️':'📦'} ${arm.arm_name}</div>
+        ${_draftArms.length>1?`<button onclick="removeArm(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕ Remove arm</button>`:''}
+      </div>
+      <div class="sp-row">
+        <div class="fg"><label class="fl">Arm Name *</label><input class="fi" value="${arm.arm_name}" onchange="_draftArms[${i}].arm_name=this.value" placeholder="e.g. Arm A — Combination"></div>
+        <div class="fg"><label class="fl">Arm Type</label><select class="fi" onchange="_draftArms[${i}].arm_type=this.value">${['active','placebo','comparator','other'].map(t=>`<option value="${t}" ${arm.arm_type===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}</select></div>
+      </div>
+      <div class="sp-row">
+        <div class="fg"><label class="fl">Randomisation Ratio</label><input class="fi" type="number" value="${arm.randomisation_ratio||1}" min="1" step="1" onchange="_draftArms[${i}].randomisation_ratio=parseFloat(this.value)||1"></div>
+        <div class="fg"><label class="fl">Overage % (supply buffer)</label><input class="fi" type="number" value="${arm.overage_pct||25}" min="0" max="100" onchange="_draftArms[${i}].overage_pct=parseFloat(this.value)||25"></div>
+      </div>
+      ${isDoseEsc?`<div class="sp-row"><div class="fg"><label class="fl">Cohort Size</label><input class="fi" type="number" value="${arm.cohort_size||6}" min="1" onchange="_draftArms[${i}].cohort_size=parseInt(this.value)||6"></div><div class="fg"><label class="fl">Dose Level Label</label><input class="fi" value="${arm.dose_label||''}" onchange="_draftArms[${i}].dose_label=this.value" placeholder="e.g. 10mg, 30mg"></div></div>`:''}
+      <div style="margin-top:12px"><div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">DRUG PRODUCTS FOR THIS ARM</div>${drugRows}
+        <button onclick="addDrug(${i})" class="btn btn-ghost btn-xs" style="margin-top:4px">+ Add combination drug</button>
+      </div>
+    </div>`;
+  }).join('');
+  const ratio=_draftArms.length>1?'Ratio: '+_draftArms.map(a=>a.randomisation_ratio||1).join(':')+' ('+_draftArms.map(a=>a.arm_name).join(' : ')+')':'';
+  return`<div style="font-size:16px;font-weight:700;margin-bottom:8px">Step 3 — Treatment Arms</div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:#1e40af">
+      💡 Each arm supports <b>multiple drugs</b> for combination therapy. Set dosing frequency and cycle length — units/cycle is calculated automatically.
+    </div>
+    ${ratio?`<div style="font-size:12px;color:var(--text3);margin-bottom:12px"><b>${ratio}</b></div>`:''}
+    ${armRows}<button onclick="addArm()" class="btn btn-ghost btn-sm" style="margin-top:4px">+ Add Arm</button>`;
 }
 
-function addArm(){_draftArms.push({id:`arm-${Date.now()}`,trial_id:_draftTrial.id,arm_name:`Arm ${_draftArms.length+1}`,arm_type:'active',randomisation_ratio:1,dose_per_visit:'',dose_unit:'units',overage_pct:25,sku_id:''});document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();}
+function updateDrug(armIdx,drugIdx,field,value){
+  let drugs=[];if(_draftArms[armIdx].drugs){try{drugs=JSON.parse(_draftArms[armIdx].drugs);}catch(e){}}
+  if(!drugs[drugIdx])drugs[drugIdx]={};drugs[drugIdx][field]=value;
+  _draftArms[armIdx].drugs=JSON.stringify(drugs);
+  document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();
+}
+function addDrug(armIdx){
+  let drugs=[];if(_draftArms[armIdx].drugs){try{drugs=JSON.parse(_draftArms[armIdx].drugs);}catch(e){}}
+  if(!drugs.length&&_draftArms[armIdx].sku_id){drugs=[{sku_id:_draftArms[armIdx].sku_id,drug_label:'',dose_per_admin:parseFloat(_draftArms[armIdx].dose_per_visit)||0,frequency:'QD',cycle_days:28}];}
+  drugs.push({sku_id:'',drug_label:'',dose_per_admin:0,frequency:'QD',cycle_days:28});
+  _draftArms[armIdx].drugs=JSON.stringify(drugs);document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();
+}
+function removeDrug(armIdx,drugIdx){
+  let drugs=[];if(_draftArms[armIdx].drugs){try{drugs=JSON.parse(_draftArms[armIdx].drugs);}catch(e){}}
+  drugs.splice(drugIdx,1);_draftArms[armIdx].drugs=JSON.stringify(drugs);document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();
+}
+function addArm(){_draftArms.push({id:`arm-${Date.now()}`,trial_id:_draftTrial.id,arm_name:`Arm ${_draftArms.length+1}`,arm_type:'active',randomisation_ratio:1,dose_per_visit:'',dose_unit:'units',overage_pct:25,sku_id:'',drugs:'[]'});document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();}
 function removeArm(i){_draftArms.splice(i,1);document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML();}
 
 function buildStep4(){
@@ -7489,9 +7755,9 @@ function buildStep5(){
   const preview=buildEnrolPreview(d.enrolment_months||def.enrolment_months,d.total_patients||def.patients,d.enrolment_curve||'s_curve');
   const est=buildDemandEst(d);
   return`<div style="font-size:16px;font-weight:700;margin-bottom:20px">Step 5 — Enrolment & Buffer Parameters</div>
-<div class="sp-row"><div class="fg"><label class="fl">Total Patients *</label><input class="fi" type="number" id="ct-patients" value="${d.total_patients||def.patients}" min="1" onchange="_draftTrial.total_patients=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,this.value,document.getElementById('ct-curve').value)"></div><div class="fg"><label class="fl">Enrolment Period (months) *</label><input class="fi" type="number" id="ct-enrol-mo" value="${d.enrolment_months||def.enrolment_months}" min="1" onchange="_draftTrial.enrolment_months=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(this.value,document.getElementById('ct-patients').value,document.getElementById('ct-curve').value)"></div></div>
-<div class="sp-row"><div class="fg"><label class="fl">Treatment Duration per Patient (months) *</label><input class="fi" type="number" id="ct-treat-mo" value="${d.treatment_months||def.treatment_months}" min="1" onchange="_draftTrial.treatment_months=parseInt(this.value)"></div><div class="fg"><label class="fl">Dropout Rate (%)</label><input class="fi" type="number" id="ct-dropout" value="${d.dropout_rate_pct||def.dropout}" min="0" max="50" onchange="_draftTrial.dropout_rate_pct=parseFloat(this.value)"></div></div>
-<div class="fg" style="margin-bottom:16px"><label class="fl">Enrolment Curve</label><select class="fi" id="ct-curve" onchange="_draftTrial.enrolment_curve=this.value;document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,document.getElementById('ct-patients').value,this.value)">${Object.entries(ENROLMENT_CURVES).map(([k,v])=>`<option value="${k}" ${(d.enrolment_curve||'s_curve')===k?'selected':''}>${v}</option>`).join('')}</select></div>
+<div class="sp-row"><div class="fg"><label class="fl">Total Patients (to be randomised) *</label><input class="fi" type="number" id="ct-patients" value="${d.total_patients||def.patients}" min="1" onchange="_draftTrial.total_patients=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,this.value,document.getElementById('ct-curve').value)"></div><div class="fg"><label class="fl">Enrolment Period (months) *</label><input class="fi" type="number" id="ct-enrol-mo" value="${d.enrolment_months||def.enrolment_months}" min="1" onchange="_draftTrial.enrolment_months=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(this.value,document.getElementById('ct-patients').value,document.getElementById('ct-curve').value)"></div></div>
+<div class="sp-row"><div class="fg"><label class="fl">Treatment Duration per Patient (months) *</label><input class="fi" type="number" id="ct-treat-mo" value="${d.treatment_months||def.treatment_months}" min="1" onchange="_draftTrial.treatment_months=parseInt(this.value)"></div><div class="fg"><label class="fl">Dropout / Discontinuation Rate (%)</label><input class="fi" type="number" id="ct-dropout" value="${d.dropout_rate_pct||def.dropout}" min="0" max="50" onchange="_draftTrial.dropout_rate_pct=parseFloat(this.value)"></div></div>
+<div class="sp-row"><div class="fg"><label class="fl">Screen Failure Rate (%)</label><input class="fi" type="number" id="ct-screen-fail" value="${d.screen_failure_pct||def.screen_failure||20}" min="0" max="80" onchange="_draftTrial.screen_failure_pct=parseFloat(this.value)" placeholder="% screened who don't enrol"><div style="font-size:11px;color:var(--text3);margin-top:3px">Screens needed: ~<b>${Math.ceil((d.total_patients||def.patients)/(1-((d.screen_failure_pct||def.screen_failure||20)/100)))}</b> patients to achieve ${d.total_patients||def.patients} randomised</div></div><div class="fg"><label class="fl">Enrolment Curve</label><select class="fi" id="ct-curve" onchange="_draftTrial.enrolment_curve=this.value;document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,document.getElementById('ct-patients').value,this.value)">${Object.entries(ENROLMENT_CURVES).map(([k,v])=>`<option value="${k}" ${(d.enrolment_curve||'s_curve')===k?'selected':''}>${v}</option>`).join('')}</select></div></div>
 <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">ENROLMENT CURVE PREVIEW</div><div id="enrol-prev" style="display:flex;gap:2px;align-items:flex-end;height:60px">${preview}</div></div>
 <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px"><div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:4px">📊 Estimated Total Drug Requirement</div><div style="font-size:12px;color:#166534">${est}</div></div>`;
 }
@@ -7609,7 +7875,16 @@ function buildStep6(){
 <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:20px">
 <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">TREATMENT ARMS</div>
 <table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:var(--text3)">${['Arm','Type','SKU','Ratio','~Patients','Dose/Visit','Overage'].map(h=>`<th style="text-align:${h==='Arm'||h==='Type'||h==='SKU'?'left':'right'};padding:4px 8px">${h}</th>`).join('')}</tr></thead><tbody>
-${_draftArms.map(arm=>{const pts=Math.round(d.total_patients*((parseFloat(arm.randomisation_ratio)||1)/tr));return`<tr style="font-size:12px;border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">${arm.arm_name}</td><td style="padding:6px 8px;color:var(--text3)">${arm.arm_type}</td><td style="padding:6px 8px">${arm.sku_id||'<span style="color:var(--red)">Not set</span>'}</td><td style="padding:6px 8px;text-align:right">${arm.randomisation_ratio||1}</td><td style="padding:6px 8px;text-align:right">~${pts}</td><td style="padding:6px 8px;text-align:right">${arm.dose_per_visit||0}</td><td style="padding:6px 8px;text-align:right">${arm.overage_pct||25}%</td></tr>`;}).join('')}
+${_draftArms.map(arm=>{
+  const pts=Math.round(d.total_patients*((parseFloat(arm.randomisation_ratio)||1)/tr));
+  let drugs=[];if(arm.drugs){try{drugs=JSON.parse(arm.drugs);}catch(e){}}
+  const skuDisplay = drugs.length
+    ? drugs.map(dg=>`<div style="font-size:11px">${dg.drug_label||dg.sku_id||'—'} <span style="color:var(--text3)">(${dg.sku_id||'—'})</span></div>`).join('')
+    : (arm.sku_id||'<span style="color:var(--red)">Not set</span>');
+  const unitsDisplay = drugs.length
+    ? drugs.map(dg=>`<div style="font-size:11px">${Math.round(calcDosePerCycle(dg))}/cycle</div>`).join('')
+    : (arm.dose_per_visit||0);
+  return`<tr style="font-size:12px;border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">${arm.arm_name}</td><td style="padding:6px 8px;color:var(--text3)">${arm.arm_type}</td><td style="padding:6px 8px">${skuDisplay}</td><td style="padding:6px 8px;text-align:right">${arm.randomisation_ratio||1}</td><td style="padding:6px 8px;text-align:right">~${pts}</td><td style="padding:6px 8px;text-align:right">${unitsDisplay}</td><td style="padding:6px 8px;text-align:right">${arm.overage_pct||25}%</td></tr>`;}).join('')}
 </tbody></table></div>
 <div style="background:var(--bg);border-radius:8px;padding:14px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">VISIT SCHEDULE (${_draftVisits.length} visits)</div>
 ${_draftVisits.length===0?'<div style="font-size:12px;color:var(--text3)">No visits defined — assumes 1 dispensing visit per month</div>':_draftVisits.map(v=>`<span style="font-size:11px;padding:2px 8px;border-radius:10px;margin:2px;display:inline-block;background:${v.drug_dispensed?'#dcfce7':'var(--border)'};color:${v.drug_dispensed?'#166534':'var(--text3)'}">${v.visit_name} (Day ${v.visit_day})${v.drug_dispensed?' 💊':''}</span>`).join('')}
@@ -7624,14 +7899,24 @@ function wizardNext(){
 
 function collectStep(s){
   if(s===1){_draftTrial.name=document.getElementById('ct-name')?.value?.trim();_draftTrial.indication=document.getElementById('ct-indication')?.value?.trim();_draftTrial.phase=document.getElementById('ct-phase')?.value;_draftTrial.status=document.getElementById('ct-status')?.value;_draftTrial.enrolment_start_date=document.getElementById('ct-start')?.value;_draftTrial.sponsor=document.getElementById('ct-sponsor')?.value?.trim();_draftTrial.notes=document.getElementById('ct-notes')?.value?.trim();}
-  if(s===5){_draftTrial.total_patients=parseInt(document.getElementById('ct-patients')?.value)||0;_draftTrial.enrolment_months=parseInt(document.getElementById('ct-enrol-mo')?.value)||0;_draftTrial.treatment_months=parseInt(document.getElementById('ct-treat-mo')?.value)||0;_draftTrial.dropout_rate_pct=parseFloat(document.getElementById('ct-dropout')?.value)||10;_draftTrial.enrolment_curve=document.getElementById('ct-curve')?.value||'s_curve';}
+  if(s===5){_draftTrial.total_patients=parseInt(document.getElementById('ct-patients')?.value)||0;_draftTrial.enrolment_months=parseInt(document.getElementById('ct-enrol-mo')?.value)||0;_draftTrial.treatment_months=parseInt(document.getElementById('ct-treat-mo')?.value)||0;_draftTrial.dropout_rate_pct=parseFloat(document.getElementById('ct-dropout')?.value)||10;_draftTrial.screen_failure_pct=parseFloat(document.getElementById('ct-screen-fail')?.value)||20;_draftTrial.enrolment_curve=document.getElementById('ct-curve')?.value||'s_curve';}
 }
 
 function validateStep(s){
   const e=[];
   if(s===1){if(!_draftTrial.name)e.push('Trial name is required');if(!_draftTrial.phase)e.push('Phase is required');if(!_draftTrial.enrolment_start_date)e.push('Enrolment start date is required');}
   if(s===2){if(!_draftTrial.trial_design)e.push('Please select a trial design');}
-  if(s===3){if(!_draftArms.length)e.push('At least one arm is required');const ns=_draftArms.filter(a=>!a.sku_id);if(ns.length)e.push(`SKU not set for: ${ns.map(a=>a.arm_name).join(', ')}`);}
+  if(s===3){
+    if(!_draftArms.length) e.push('At least one arm is required');
+    const ns = _draftArms.filter(a => {
+      // Check drugs JSON first (multi-drug arms), then legacy sku_id
+      let drugs = [];
+      if (a.drugs) { try { drugs = JSON.parse(a.drugs); } catch(ex) {} }
+      const hasDrugSku = drugs.some(d => d.sku_id);
+      return !hasDrugSku && !a.sku_id;
+    });
+    if (ns.length) e.push(`SKU not set for: ${ns.map(a=>a.arm_name).join(', ')}`);
+  }
   if(s===5){if(!_draftTrial.total_patients)e.push('Total patients required');if(!_draftTrial.enrolment_months)e.push('Enrolment months required');if(!_draftTrial.treatment_months)e.push('Treatment duration required');}
   return e;
 }
@@ -7653,6 +7938,7 @@ async function saveTrial(){
       enrolment_curve:      _draftTrial.enrolment_curve || 's_curve',
       enrolment_start_date: _draftTrial.enrolment_start_date || null,
       dropout_rate_pct:     parseFloat(_draftTrial.dropout_rate_pct) || 10,
+      screen_failure_pct:   parseFloat(_draftTrial.screen_failure_pct) || 20,
       sponsor:              _draftTrial.sponsor || null,
       notes:                _draftTrial.notes   || null,
     };
@@ -7670,7 +7956,7 @@ async function saveTrial(){
       overage_pct:         parseFloat(a.overage_pct)         || 25,
       cohort_size:         parseInt(a.cohort_size)           || null,
       dose_label:          a.dose_label          || null,
-      notes:               a.notes               || null,
+      notes:               a.drugs ? ('DRUGS:'+a.drugs) : (a.notes || null),
     }));
 
     // Whitelist clinical_visits columns
@@ -7684,11 +7970,10 @@ async function saveTrial(){
       notes:         v.notes  || null,
     }));
 
-    // Guard — ensure id is present
-    if(!trialPayload.id){ 
-      alert('DEBUG — _draftTrial.id: [' + _draftTrial.id + ']\ntrialPayload.id: [' + trialPayload.id + ']\ntype: ' + typeof trialPayload.id);
-      showToast('Error: trial ID missing — please restart the wizard'); 
-      return; 
+    // Guard — ensure id is present, generate one if somehow lost
+    if (!trialPayload.id) {
+      trialPayload.id = 'CT-' + Date.now();
+      _draftTrial.id = trialPayload.id;
     }
 
     // Delete existing then insert fresh
@@ -7752,18 +8037,103 @@ ${prev.length?`<div style="margin-top:24px"><div style="font-size:13px;font-weig
 </div>`;}).join('')}</div>`:''}`;
 }
 
-function buildForecastTable(result,arms,trial){
-  if(!result.rows.length)return'<div style="color:var(--text3);padding:20px">No forecast data — check arm SKU assignments and doses.</div>';
-  const skus=[...new Set(result.rows.map(r=>r.sku_id))];
-  const periods=[...new Set(result.rows.map(r=>r.period_date))].sort();
-  const pivot={};result.rows.forEach(r=>{if(!pivot[r.period_date])pivot[r.period_date]={};pivot[r.period_date][r.sku_id]=(pivot[r.period_date][r.sku_id]||0)+r.demand_qty;});
-  const hdrs=skus.map(s=>{const arm=arms.find(a=>a.sku_id===s);return`<th style="padding:8px 12px;text-align:right;font-size:11px;color:#1e293b;white-space:nowrap">${arm?.arm_name||s}<br><span style="font-weight:400;opacity:0.7">${s}</span></th>`;}).join('');
-  const totals=skus.map(s=>result.rows.filter(r=>r.sku_id===s).reduce((t,r)=>t+r.demand_qty,0));
-  const rows=periods.map((pd,i)=>{const lb=new Date(pd).toLocaleDateString('en-GB',{month:'short',year:'2-digit'});const bg=i%2===0?'var(--bg)':'var(--bg2)';return`<tr><td style="padding:6px 12px;font-size:12px;font-weight:600;background:${bg}">${lb}</td>${skus.map(s=>`<td style="padding:6px 12px;text-align:right;font-size:12px;background:${bg}">${(pivot[pd]?.[s]||0)>0?(pivot[pd][s]).toLocaleString():'—'}</td>`).join('')}</tr>`;}).join('');
-  const prev=buildEnrolPreview(trial.enrolment_months,trial.total_patients,trial.enrolment_curve);
-  return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">ENROLMENT CURVE — ${trial.enrolment_months} months</div><div style="display:flex;gap:2px;align-items:flex-end;height:50px">${prev}</div></div>
-<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#e8edf5"><th style="padding:8px 12px;text-align:left;font-size:11px;color:#1e293b;font-weight:700">Period</th>${hdrs}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td style="padding:8px 12px;font-weight:700;font-size:12px;background:#f0fdf4;color:#166534">TOTAL</td>${totals.map(t=>`<td style="padding:8px 12px;text-align:right;font-weight:700;font-size:12px;background:#f0fdf4;color:#166534">${t.toLocaleString()}</td>`).join('')}</tr></tfoot></table></div>
-<div style="font-size:11px;color:var(--text3);margin-top:8px">Includes per-arm overage. Dropout: ${trial.dropout_rate_pct||10}%. Curve: ${trial.enrolment_curve||'s_curve'}.</div>`;
+function buildForecastTable(result, arms, trial) {
+  if (!result.rows.length) return '<div style="color:var(--text3);padding:20px">No forecast data — check arm SKU assignments and doses.</div>';
+
+  const periods = [...new Set(result.rows.map(r => r.period_date))].sort();
+  const fmtPd   = pd => new Date(pd).toLocaleDateString('en-GB', {month:'short', year:'2-digit'});
+
+  // Drug demand pivot
+  const skus   = [...new Set(result.rows.map(r => r.sku_id))];
+  const pivot  = {};
+  result.rows.forEach(r => {
+    if (!pivot[r.period_date]) pivot[r.period_date] = {};
+    pivot[r.period_date][r.sku_id] = (pivot[r.period_date][r.sku_id] || 0) + r.demand_qty;
+  });
+  const hdrs   = skus.map(s => {
+    const detail = result.detail?.find(d => d.sku_id === s);
+    const label  = detail?.drug_label || s;
+    return `<th style="padding:8px 12px;text-align:right;font-size:11px;color:#1e293b;white-space:nowrap">${label}<br><span style="font-weight:400;opacity:0.7">${s}</span></th>`;
+  }).join('');
+  const totals = skus.map(s => result.rows.filter(r => r.sku_id === s).reduce((t, r) => t + r.demand_qty, 0));
+  const rows   = periods.map((pd, i) => {
+    const lb = fmtPd(pd);
+    const bg = i % 2 === 0 ? 'var(--bg)' : 'var(--bg2)';
+    return `<tr><td style="padding:6px 12px;font-size:12px;font-weight:600;background:${bg}">${lb}</td>${skus.map(s => `<td style="padding:6px 12px;text-align:right;font-size:12px;background:${bg}">${(pivot[pd]?.[s] || 0) > 0 ? pivot[pd][s].toLocaleString() : '—'}</td>`).join('')}</tr>`;
+  }).join('');
+
+  // Patient breakdown
+  const enrolMo    = parseInt(trial.enrolment_months) || 12;
+  const treatMo    = parseInt(trial.treatment_months) || 6;
+  const dropout    = 1 - (parseFloat(trial.dropout_rate_pct) || 10) / 100;
+  const screenFail = (parseFloat(trial.screen_failure_pct) || 0) / 100;
+  const totalPts   = parseInt(trial.total_patients) || 0;
+  const enrolled   = Math.ceil(totalPts / (1 - screenFail));
+  const weights    = enrolmentWeights(enrolMo, trial.enrolment_curve);
+  const totalRatio = arms.reduce((s, a) => s + (parseFloat(a.randomisation_ratio) || 1), 0);
+  const newEnrol   = Array(periods.length + 4).fill(0);
+  for (let m = 0; m < enrolMo; m++) newEnrol[m] = enrolled * weights[m];
+
+  const armDrugRows = [];
+  arms.forEach(arm => {
+    let drugs = [];
+    if (arm.drugs) { try { drugs = JSON.parse(arm.drugs); } catch(e) {} }
+    if (!drugs.length && arm.notes && arm.notes.startsWith('DRUGS:')) { try { drugs = JSON.parse(arm.notes.slice(6)); } catch(e) {} }
+    if (!drugs.length && arm.sku_id) drugs = [{ sku_id: arm.sku_id, drug_label: arm.sku_id, frequency: 'QD' }];
+    const ratio = (parseFloat(arm.randomisation_ratio) || 1) / totalRatio;
+    drugs.forEach(drug => {
+      const freqLabel = (DOSE_FREQUENCIES[drug.frequency]?.label || 'QD').split(' ')[0];
+      armDrugRows.push({ arm_name: arm.arm_name, drug_label: `${drug.drug_label || drug.sku_id} ${freqLabel}`, ratio });
+    });
+  });
+
+  const ptHdrs = `<th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:#1e293b;min-width:160px">ARM</th>
+    <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:#1e293b;min-width:160px">Drug</th>
+    ${periods.map(pd => `<th style="padding:6px 10px;text-align:right;font-size:11px;font-weight:700;color:#1e293b;white-space:nowrap">${fmtPd(pd)}</th>`).join('')}
+    <th style="padding:6px 10px;text-align:right;font-size:11px;font-weight:700;color:#166534">PEAK</th>`;
+
+  let prevArm = '';
+  const ptRows = armDrugRows.map((adr, ri) => {
+    const monthlyPts = periods.map((pd, mi) => {
+      let active = 0;
+      for (let e = 0; e <= mi; e++) { if ((mi - e) < treatMo) active += newEnrol[e] * adr.ratio * dropout; }
+      return Math.round(active);
+    });
+    const peak = Math.max(...monthlyPts);
+    const isNewArm = adr.arm_name !== prevArm;
+    prevArm = adr.arm_name;
+    const bg = ri % 2 === 0 ? 'white' : '#f8fafc';
+    return `<tr>
+      <td style="padding:5px 10px;font-size:12px;font-weight:${isNewArm?700:400};color:${isNewArm?'var(--text)':'var(--text3)'};background:${bg}">${isNewArm ? adr.arm_name : '↳'}</td>
+      <td style="padding:5px 10px;font-size:12px;color:var(--text2);background:${bg}">${adr.drug_label}</td>
+      ${monthlyPts.map(v => `<td style="padding:5px 10px;text-align:right;font-size:12px;background:${bg}">${v > 0 ? v : '—'}</td>`).join('')}
+      <td style="padding:5px 10px;text-align:right;font-size:12px;font-weight:700;color:#166534;background:${bg}">${peak}</td>
+    </tr>`;
+  }).join('');
+
+  const prev = buildEnrolPreview(trial.enrolment_months, trial.total_patients, trial.enrolment_curve);
+
+  return `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">ENROLMENT CURVE — ${trial.enrolment_months} months</div>
+      <div style="display:flex;gap:2px;align-items:flex-end;height:50px">${prev}</div>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin:0 0 8px">📦 Monthly Drug Demand (units, inc. overage)</div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:24px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#e8edf5"><th style="padding:8px 12px;text-align:left;font-size:11px;color:#1e293b;font-weight:700">Period</th>${hdrs}</tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td style="padding:8px 12px;font-weight:700;font-size:12px;background:#f0fdf4;color:#166534">TOTAL</td>${totals.map(t => `<td style="padding:8px 12px;text-align:right;font-weight:700;font-size:12px;background:#f0fdf4;color:#166534">${t.toLocaleString()}</td>`).join('')}</tr></tfoot>
+      </table>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin:0 0 8px">👥 Patients Breakdown (active patients on treatment per month)</div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#e8edf5">${ptHdrs}</tr></thead>
+        <tbody>${ptRows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Drug demand includes per-arm overage. Patient counts: post-dropout (${trial.dropout_rate_pct||10}%), post-screen-failure (${trial.screen_failure_pct||20}%). Curve: ${trial.enrolment_curve||'s_curve'}.</div>`;
 }
 
 async function runClinicalForecast(trialId){
@@ -7771,7 +8141,11 @@ async function runClinicalForecast(trialId){
   const arms=(DB.clinical_arms||[]).filter(a=>a.trial_id===trialId);
   const visits=(DB.clinical_visits||[]).filter(v=>v.trial_id===trialId);
   if(!trial||!arms.length){showToast('Configure trial arms before generating forecast');return;}
-  const noSku=arms.filter(a=>!a.sku_id);if(noSku.length){showToast(`SKU not set for: ${noSku.map(a=>a.arm_name).join(', ')}`);return;}
+  const noSku=arms.filter(a=>{
+    let drugs=[];if(a.notes&&a.notes.startsWith('DRUGS:')){try{drugs=JSON.parse(a.notes.slice(6));}catch(e){}}
+    return !drugs.some(d=>d.sku_id) && !a.sku_id;
+  });
+  if(noSku.length){showToast(`SKU not set for: ${noSku.map(a=>a.arm_name).join(', ')}`);return;}
   await ensureToken();showToast('Generating clinical forecast…');
   try{
     const result=generateClinicalForecast(trial,arms,visits);
@@ -7815,6 +8189,142 @@ async function activateForecastVersion(verId){
   }catch(e){showToast('Failed: '+e.message);}
 }
 // ── CLINICAL SCENARIOS ─────────────────────────────────────────
+function openInterimModal(trialId) {
+  _interimTrialId = trialId;
+  // Set up custom month toggle
+  const timingEl = document.getElementById('interim-timing');
+  if (timingEl) timingEl.onchange = () => {
+    document.getElementById('interim-custom-month-wrap').style.display =
+      timingEl.value === 'custom' ? 'block' : 'none';
+  };
+  interimCheckProbs();
+  openModal('modal-interim');
+}
+
+function interimCheckProbs() {
+  const p = ['interim-p-efficacy','interim-p-futility','interim-p-safety','interim-p-expand']
+    .map(id => parseFloat(document.getElementById(id)?.value) || 0);
+  const total = p.reduce((s,v) => s + v, 0);
+  const cont  = Math.max(0, 100 - total);
+  const contEl = document.getElementById('interim-p-continue');
+  if (contEl) contEl.value = cont.toFixed(1);
+  const warn = document.getElementById('interim-prob-warning');
+  const ok   = document.getElementById('interim-prob-ok');
+  if (total > 100) {
+    if (warn) warn.style.display = 'block';
+    if (ok)   ok.style.display   = 'none';
+  } else {
+    if (warn) warn.style.display = 'none';
+    if (ok)   ok.style.display   = 'block';
+  }
+}
+
+let _interimTrialId = null;
+
+function runInterimAnalysis() {
+  const trialId = _interimTrialId;
+  const trial   = (DB.clinical_trials||[]).find(t => t.id === trialId);
+  const arms    = (DB.clinical_arms||[]).filter(a => a.trial_id === trialId);
+  const visits  = (DB.clinical_visits||[]).filter(v => v.trial_id === trialId);
+  if (!trial || !arms.length) { showToast('Configure trial first'); return; }
+
+  // Collect parameters
+  const timingVal  = document.getElementById('interim-timing')?.value;
+  const enrolMo    = parseInt(trial.enrolment_months) || 12;
+  const treatMo    = parseInt(trial.treatment_months) || 6;
+  const totalPts   = parseInt(trial.total_patients)   || 0;
+
+  let interimMonth;
+  if (timingVal === 'custom') {
+    interimMonth = parseInt(document.getElementById('interim-custom-month')?.value) || 8;
+  } else {
+    // timing is fraction of treatment complete — convert to calendar month
+    const fraction    = parseFloat(timingVal) || 0.5;
+    interimMonth      = Math.round(enrolMo * fraction + treatMo * fraction);
+  }
+
+  const pEfficacy = (parseFloat(document.getElementById('interim-p-efficacy')?.value) || 0) / 100;
+  const pFutility = (parseFloat(document.getElementById('interim-p-futility')?.value) || 0) / 100;
+  const pSafety   = (parseFloat(document.getElementById('interim-p-safety')?.value)   || 0) / 100;
+  const pExpand   = (parseFloat(document.getElementById('interim-p-expand')?.value)   || 0) / 100;
+  const extraPts  = parseInt(document.getElementById('interim-extra-pts')?.value)     || 30;
+  const pContinue = Math.max(0, 1 - pEfficacy - pFutility - pSafety - pExpand);
+  const pStop     = pEfficacy + pFutility + pSafety;
+
+  if (pEfficacy + pFutility + pSafety + pExpand > 1.001) {
+    showToast('Probabilities exceed 100% — please adjust'); return;
+  }
+
+  // ── Generate outcome forecasts ────────────────────────────
+  // Base case — full trial
+  const base = generateClinicalForecast(trial, arms, visits);
+
+  // Early stop — trial ends at interimMonth
+  const trialStop  = { ...trial, enrolment_months: Math.min(interimMonth, enrolMo),
+                                  treatment_months: Math.min(treatMo, Math.max(1, interimMonth - enrolMo)) };
+  const foreStop   = generateClinicalForecast(trialStop, arms, visits);
+
+  // Sample size expansion
+  const trialExp   = { ...trial, total_patients: totalPts + extraPts };
+  const foreExp    = generateClinicalForecast(trialExp, arms, visits);
+
+  // Continue unchanged = base
+  const foreCont   = base;
+
+  // ── Probability-weighted expected demand ─────────────────
+  // Build period union
+  const allPeriods = [...new Set([
+    ...base.rows.map(r=>r.period_date),
+    ...foreStop.rows.map(r=>r.period_date),
+    ...foreExp.rows.map(r=>r.period_date),
+  ])].sort();
+  const allSkus = [...new Set(base.rows.map(r=>r.sku_id))];
+
+  function pivotTotal(forecast) {
+    const t = {};
+    forecast.rows.forEach(r => { t[r.sku_id] = (t[r.sku_id]||0) + r.demand_qty; });
+    return t;
+  }
+  const baseTotal = pivotTotal(base);
+  const stopTotal = pivotTotal(foreStop);
+  const expTotal  = pivotTotal(foreExp);
+
+  // Weighted = stop_prob×stop + expand_prob×expand + continue_prob×base
+  const weightedTotal = {};
+  allSkus.forEach(s => {
+    weightedTotal[s] = Math.round(
+      pStop    * (stopTotal[s]||0) +
+      pExpand  * (expTotal[s]||0)  +
+      pContinue* (baseTotal[s]||0)
+    );
+  });
+
+  // Potential waste = base - stop (units that may be wasted if trial stops early)
+  const potentialWaste = {};
+  allSkus.forEach(s => {
+    potentialWaste[s] = Math.max(0, (baseTotal[s]||0) - (stopTotal[s]||0));
+  });
+
+  // Store as scenario
+  const scenId = 'interim_analysis_' + Date.now();
+  const label  = `🔬 Interim Analysis (Month ${interimMonth})`;
+
+  _clinicalScenarios = _clinicalScenarios.filter(s => !s.id.startsWith('interim_analysis'));
+  _clinicalScenarios.push({
+    id: scenId, label, base,
+    scenario: { rows: base.rows }, // weighted shown separately
+    modTrial: trialStop, modArms: arms,
+    interimData: {
+      interimMonth, pStop, pEfficacy, pFutility, pSafety, pExpand, pContinue,
+      extraPts, baseTotal, stopTotal, expTotal, weightedTotal, potentialWaste,
+      allSkus,
+    }
+  });
+
+  closeModal('modal-interim');
+  document.getElementById('clin-scen-results').innerHTML = buildClinScenResults(trial, arms, visits);
+}
+
 function buildClinicalScenariosHTML(){
   const trials=DB.clinical_trials||[];
   if(!trials.length)return`<div style="text-align:center;padding:60px;color:var(--text3)"><div style="font-size:48px">🧪</div><div style="margin-top:16px">No trials yet</div><button onclick="setClinicalView('builder')" class="btn btn-primary" style="margin-top:16px">+ Build Protocol</button></div>`;
@@ -7831,8 +8341,9 @@ function buildClinicalScenariosHTML(){
     {id:'extra_patients',icon:'➕',label:'Protocol Expansion +25%',desc:'25% additional patients added'},
     {id:'clinical_hold',icon:'⏸️',label:'Clinical Hold (3mo)',desc:'Trial paused for 3 months'},
     {id:'phase3_bridge',icon:'🌉',label:'Ph3 + Commercial Bridge',desc:'Overlap clinical and commercial demand'},
+    {id:'interim_analysis',icon:'🔬',label:'Interim Analysis',desc:'Model early stop, futility, or sample size re-estimation'},
   ];
-  const cards=SCEN_TYPES.map(sc=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer" onclick="runClinScenario('${trialId}','${sc.id}')"><div style="font-size:24px;margin-bottom:6px">${sc.icon}</div><div style="font-weight:700;font-size:13px;margin-bottom:4px">${sc.label}</div><div style="font-size:12px;color:var(--text3);margin-bottom:12px">${sc.desc}</div><button class="btn btn-ghost btn-sm" style="width:100%">Run Scenario →</button></div>`).join('');
+  const cards=SCEN_TYPES.map(sc=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer" onclick="${sc.id==='interim_analysis'?`openInterimModal('${trialId}')`:`runClinScenario('${trialId}','${sc.id}')`}"><div style="font-size:24px;margin-bottom:6px">${sc.icon}</div><div style="font-weight:700;font-size:13px;margin-bottom:4px">${sc.label}</div><div style="font-size:12px;color:var(--text3);margin-bottom:12px">${sc.desc}</div><button class="btn btn-ghost btn-sm" style="width:100%">${sc.id==='interim_analysis'?'Configure →':'Run Scenario →'}</button></div>`).join('');
   const results=_clinicalScenarios.length>0?buildClinScenResults(trial,arms,visits):'<div style="color:var(--text3);font-size:13px;margin-top:24px">Run a scenario above to see comparison results.</div>';
   return`<div style="margin-bottom:20px"><div style="font-size:16px;font-weight:700;margin-bottom:4px">Clinical Scenario Planning</div><div style="font-size:13px;color:var(--text3)">Model what-if changes to trial parameters and compare drug demand impact</div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">${cards}</div><div id="clin-scen-results">${results}</div>`;
 }
@@ -7851,7 +8362,7 @@ function runClinScenario(trialId,scenId){
     dose_decrease:()=>{ma.forEach(a=>{a.dose_per_visit=(parseFloat(a.dose_per_visit)||0)*0.75;});},
     extra_patients:()=>{mt.total_patients=Math.ceil(trial.total_patients*1.25);},
     clinical_hold:()=>{mt.enrolment_months=trial.enrolment_months+3;const d=new Date(trial.enrolment_start_date||new Date());d.setMonth(d.getMonth()+3);mt.enrolment_start_date=d.toISOString().split('T')[0];},
-    phase3_bridge:()=>{mt.total_patients=Math.ceil(trial.total_patients*1.2);mt.treatment_months=(trial.treatment_months||6)+6;},
+    interim_analysis: () => {}, // handled via modal — no-op here
   };
   if(mods[scenId])mods[scenId]();
   const labels={slow_enrol:'🐢 Slow Enrolment',fast_enrol:'🚀 Fast Enrolment',high_dropout:'📉 High Dropout',dose_increase:'⬆️ Dose +50%',dose_decrease:'⬇️ Dose -25%',extra_patients:'➕ Protocol Expansion',clinical_hold:'⏸️ Clinical Hold',phase3_bridge:'🌉 Ph3+Commercial Bridge'};
@@ -7867,6 +8378,81 @@ function buildClinScenResults(trial,arms,visits){
   const base=generateClinicalForecast(trial,arms,visits);
   const baseTotal=base.rows.reduce((s,r)=>s+r.demand_qty,0);
   const cards=_clinicalScenarios.map(sc=>{
+    // ── Interim analysis — special rich card ─────────────
+    if(sc.interimData){
+      const d=sc.interimData;
+      const fmt=n=>n.toLocaleString();
+      const skuNames=d.allSkus.map(s=>{
+        const detail=sc.base.detail?.find(r=>r.sku_id===s);
+        return detail?.drug_label||s;
+      });
+      const skuRows=d.allSkus.map((s,i)=>`
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:5px 8px;font-size:12px;font-weight:600">${skuNames[i]||s}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px">${fmt(d.baseTotal[s]||0)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px;color:#dc2626">${fmt(d.stopTotal[s]||0)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px;color:#7c3aed">${fmt(d.expTotal[s]||0)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700;color:#1e40af">${fmt(d.weightedTotal[s]||0)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px;color:#f59e0b">${fmt(d.potentialWaste[s]||0)}</td>
+        </tr>`).join('');
+      return`<div style="background:var(--bg2);border:2px solid #bfdbfe;border-radius:10px;padding:16px;grid-column:1/-1">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <div style="font-weight:700;font-size:15px">${sc.label}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">Probability-weighted supply impact across all possible trial outcomes</div>
+          </div>
+          <button onclick="_clinicalScenarios=_clinicalScenarios.filter(s=>s.id!=='${sc.id}');document.getElementById('clin-scen-results').innerHTML=buildClinScenResults(null,[],[])" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px">✕</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px">
+          <div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:#059669">${(d.pEfficacy*100).toFixed(0)}%</div>
+            <div style="font-size:11px;color:#059669;font-weight:600">Early Stop</div>
+            <div style="font-size:10px;color:var(--text3)">Efficacy</div>
+          </div>
+          <div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:#dc2626">${(d.pFutility*100).toFixed(0)}%</div>
+            <div style="font-size:11px;color:#dc2626;font-weight:600">Early Stop</div>
+            <div style="font-size:10px;color:var(--text3)">Futility</div>
+          </div>
+          <div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:#f59e0b">${(d.pSafety*100).toFixed(0)}%</div>
+            <div style="font-size:11px;color:#f59e0b;font-weight:600">Early Stop</div>
+            <div style="font-size:10px;color:var(--text3)">Safety</div>
+          </div>
+          <div style="background:#f5f3ff;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:#7c3aed">${(d.pExpand*100).toFixed(0)}%</div>
+            <div style="font-size:11px;color:#7c3aed;font-weight:600">Expand</div>
+            <div style="font-size:10px;color:var(--text3)">+${d.extraPts} pts</div>
+          </div>
+          <div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:#1e40af">${(d.pContinue*100).toFixed(0)}%</div>
+            <div style="font-size:11px;color:#1e40af;font-weight:600">Continue</div>
+            <div style="font-size:10px;color:var(--text3)">Unchanged</div>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:#e8edf5">
+              <th style="padding:6px 8px;text-align:left;font-size:11px">Drug / SKU</th>
+              <th style="padding:6px 8px;text-align:right;font-size:11px">Base (full trial)</th>
+              <th style="padding:6px 8px;text-align:right;font-size:11px;color:#dc2626">Early Stop</th>
+              <th style="padding:6px 8px;text-align:right;font-size:11px;color:#7c3aed">Expanded</th>
+              <th style="padding:6px 8px;text-align:right;font-size:11px;color:#1e40af">Wtd. Expected</th>
+              <th style="padding:6px 8px;text-align:right;font-size:11px;color:#f59e0b">Max Waste Risk</th>
+            </tr></thead>
+            <tbody>${skuRows}</tbody>
+          </table>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:10px">
+          Interim at month <b>${d.interimMonth}</b>. Weighted Expected = probability-weighted average across all outcomes. Max Waste Risk = Base − Early Stop (units potentially unused if trial stops early).
+        </div>
+        <button onclick="saveClinScenForecast('${sc.id}')" class="btn btn-ghost btn-sm" style="margin-top:10px">💾 Save Weighted Forecast as Version</button>
+      </div>`;
+    }
+
+    // ── Standard scenario card ────────────────────────────
     const sct=sc.scenario.rows.reduce((s,r)=>s+r.demand_qty,0);
     const diff=sct-baseTotal;const pct=baseTotal>0?((diff/baseTotal)*100).toFixed(1):'0';
     const col=diff>0?'#dc2626':diff<0?'#059669':'#6b7280';
@@ -7877,7 +8463,8 @@ function buildClinScenResults(trial,arms,visits){
   <div style="text-align:center"><div style="font-size:20px;font-weight:700;color:${col}">${sct.toLocaleString()}</div><div style="font-size:11px;color:var(--text3)">Scenario</div></div>
   <div style="text-align:center"><div style="font-size:20px;font-weight:700;color:${col}">${diff>=0?'+':''}${diff.toLocaleString()}</div><div style="font-size:11px;color:var(--text3)">${diff>=0?'+':''}${pct}%</div></div>
 </div>
-<button onclick="saveClinScenForecast('${sc.id}')" class="btn btn-ghost btn-sm" style="width:100%">💾 Save as Forecast Version</button></div>`;}).join('');
+<button onclick="saveClinScenForecast('${sc.id}')" class="btn btn-ghost btn-sm" style="width:100%">💾 Save as Forecast Version</button></div>`;
+  }).join('');
   return`<div style="font-size:13px;font-weight:700;color:var(--text3);margin-bottom:12px">SCENARIO COMPARISON</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">${cards}</div>`;
 }
 
@@ -14365,7 +14952,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: FIX5-6-7-v2 | Net status fixed bottom-right');
+    console.log('MERIDIAN VERSION: CLINICAL-v7 | Run-in calc fix');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
