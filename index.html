@@ -941,7 +941,7 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
     <!-- Network status pill — shown when offline or a request is in-flight -->
     <div id="net-status" style="display:none;position:fixed;bottom:72px;right:20px;z-index:9999;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.15)"></div>
     <div class="tb-actions">
-      <button class="btn btn-secondary btn-sm" onclick="showToast('Exporting data…')">↓ Export</button>
+      <button class="btn btn-secondary btn-sm" id="export-btn" onclick="handleExport()">↓ Export</button>
       <button class="btn btn-primary btn-sm" id="cta-btn" onclick="handleCTA()">+ Add Item</button>
       <div style="position:relative;display:inline-block">
         <button class="btn btn-ghost btn-sm" id="alert-bell-btn" onclick="toggleAlertDropdown()" title="Alerts" style="font-size:18px;padding:4px 8px;line-height:1">
@@ -3935,7 +3935,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: CLINICAL-v9b | Syntax fix');
+    console.log('MERIDIAN VERSION: CLINICAL-v11c | Fix pfRows push filter bug');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -3990,7 +3990,7 @@ const META = {
   inventory:  {crumb:'Operations',  title:'Inventory Management', cta:'+ Add Material'},
   locations:  {crumb:'Operations',  title:'Storage Locations',    cta:'+ Add Location'},
   alerts:     {crumb:'System',      title:'Alerts & Notifications', cta:'&#x27f3; Refresh'},
-  clinical:   {crumb:'Clinical',    title:'Clinical Planning',    cta:'+ New Trial'},
+  clinical:   {crumb:'Clinical',    title:'Clinical Planning',    cta:'+ New Trial', export:'exportClinicalForecast()'},
   reports:    {crumb:'System',      title:'Reports & Export',       cta:''},
   qc:         {crumb:'Quality',     title:'Quality Control',        cta:'+ QC Review'},
   implementation:{crumb:'System',     title:'Implementation',          cta:'&#x25b6; Start Setup'},
@@ -4062,6 +4062,15 @@ function showView(name, el) {
 
   // Re-apply viewer restrictions after dynamic content renders
   if (getRole() === 'viewer') setTimeout(applyRoleUI, 50);
+}
+
+function handleExport() {
+  const v = _currentView;
+  if (v === 'clinical')     { exportClinicalForecast(); return; }
+  if (v === 'mrp')          { exportMRPCSV?.();          return; }
+  if (v === 'planningtable'){ exportPlanTableCSV?.();    return; }
+  if (v === 'scenarios')    { exportScenarioComparison?.(); return; }
+  showToast('Exporting data…');
 }
 
 function handleCTA() {
@@ -7837,7 +7846,60 @@ function exportClinicalForecast(){
 
   XLSX.utils.book_append_sheet(wb,ws,'Monthly Demand');
 
-  // ── CMO Sheet — placebo/comparator arms only, horizontal ──
+  // ── Patient Flow sheet ───────────────────────────────────────
+  const enrolMoX    = parseInt(trial.enrolment_months) || 12;
+  const treatMoX    = parseInt(trial.treatment_months) || 6;
+  const dropoutX    = 1 - (parseFloat(trial.dropout_rate_pct) || 10) / 100;
+  const screenFailX = (parseFloat(trial.screen_failure_pct) || 0) / 100;
+  const totalPtsX   = parseInt(trial.total_patients) || 0;
+  const enrolledX   = Math.ceil(totalPtsX / (1 - screenFailX));
+  const weightsX    = enrolmentWeights(enrolMoX, trial.enrolment_curve);
+  const totalRatioX = arms.reduce((s,a) => s + (parseFloat(a.randomisation_ratio)||1), 0);
+  const trialVisitsX = (DB.clinical_visits||[]).filter(v => v.trial_id === trialId);
+  const hasRunInX    = trialVisitsX.some(v => v.drug_dispensed && (parseInt(v.visit_day)||0) < 0);
+  const runInDaysX   = hasRunInX ? Math.abs(Math.min(...trialVisitsX.filter(v=>v.drug_dispensed&&(parseInt(v.visit_day)||0)<0).map(v=>parseInt(v.visit_day)||0))) : 0;
+  const screenedX    = Math.ceil(totalPtsX / (1 - screenFailX));
+  const passRateX    = 1 - screenFailX;
+
+  const monthlyScreenedX    = periods.map((pd,mi) => mi < enrolMoX ? Math.round(screenedX * weightsX[mi] * enrolMoX) : 0);
+  const monthlyRandomisedX  = periods.map((pd,mi) => { const p = mi > 0 ? monthlyScreenedX[mi-1] : 0; return Math.round(p * passRateX / arms.length); });
+  const monthlyActiveX      = periods.map((pd,mi) => { let a=0; for(let e=0;e<=mi;e++){if((mi-e)<treatMoX)a+=(monthlyRandomisedX[e]||0)*dropoutX;} return Math.round(a); });
+  const monthlyCompletedX   = periods.map((pd,mi) => { const c=mi-treatMoX; return c<0?0:Math.round((monthlyRandomisedX[c]||0)*dropoutX); });
+  const monthlyDiscX        = periods.map((pd,mi) => { const c=mi-treatMoX; return c<0?0:Math.round((monthlyRandomisedX[c]||0)*(1-dropoutX)); });
+
+  const pfHeaders = ['Patient Flow', ...periods.map(fmtPd), 'PEAK / TOTAL'];
+  const pfRows = [
+    ['MERIDIAN ERP — Patient Flow Export','','','','Generated:',ts2],
+    ['Trial:', trial.name, '', 'Phase:', trial.phase],
+    ['Total Patients (randomised):', totalPtsX, '', 'Screen Failure:', (screenFailX*100).toFixed(0)+'%'],
+    ['Screened:', screenedX, '', 'Dropout Rate:', (parseFloat(trial.dropout_rate_pct)||10)+'%'],
+    ['Enrolment Period:', enrolMoX+' months', '', 'Treatment Duration:', treatMoX+' months'],
+    [''],
+    pfHeaders,
+  ];
+
+  if (hasRunInX) {
+    const runInPtsPerArm = Math.round(screenedX / arms.length);
+    const runInMthly = periods.map((pd,mi) => mi < enrolMoX ? Math.round(runInPtsPerArm * weightsX[mi] * enrolMoX) : 0);
+    pfRows.push(['🔍 Screened / Run-in (all arms)', ...runInMthly, Math.max(...runInMthly)]);
+  }
+
+  pfRows.push(
+    ['✅ Randomised per arm ('+arms.length+' arms)', ...monthlyRandomisedX, monthlyRandomisedX.reduce((s,v)=>s+v,0)],
+    ['💊 Active on Treatment per arm', ...monthlyActiveX, Math.max(...monthlyActiveX)],
+    ['🏁 Completed Treatment per arm', ...monthlyCompletedX, monthlyCompletedX.reduce((s,v)=>s+v,0)],
+    ['❌ Discontinued per arm', ...monthlyDiscX, monthlyDiscX.reduce((s,v)=>s+v,0)],
+    [''],
+    ['Notes:'],
+    ['- Randomised = prior month screened × '+(passRateX*100).toFixed(0)+'% pass rate ÷ '+arms.length+' arms (1-month lag)'],
+    ['- Active = cumulative patients within '+treatMoX+'-month treatment window ('+((1-dropoutX)*100).toFixed(0)+'% discontinuation applied)'],
+    ['- PEAK shown for Screened and Active rows; TOTAL shown for Randomised, Completed, Discontinued'],
+  );
+  if (hasRunInX) pfRows.push(['- Run-in duration: '+runInDaysX+' days before randomisation']);
+
+  const wsPF = XLSX.utils.aoa_to_sheet(pfRows);
+  wsPF['!cols'] = [{wch:38}, ...periods.map(()=>({wch:9})), {wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsPF, 'Patient Flow');
   const extArms=arms.filter(a=>a.arm_type==='placebo'||a.arm_type==='comparator');
   if(extArms.length){
     const cmoDateRow=['','SKU',...periods.map(fmtPd),'TOTAL'];
@@ -7857,8 +7919,26 @@ function exportClinicalForecast(){
     XLSX.utils.book_append_sheet(wb,wsCMO,'CMO Placebo Supply');
   }
 
-  const ts=new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb,`Meridian_Clinical_Forecast_${trial.name.replace(/\s+/g,'_')}_${ts}.xlsx`);
+  try {
+    XLSX.writeFile(wb, `Meridian_Clinical_Forecast_${trial.name.replace(/\s+/g,'_')}_${ts2}.xlsx`);
+    showToast('✓ Forecast exported successfully');
+  } catch(e) {
+    try {
+      const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      const blob  = new Blob([wbout], { type:'application/octet-stream' });
+      const url   = URL.createObjectURL(blob);
+      const a     = document.createElement('a');
+      a.href      = url;
+      a.download  = `Meridian_Clinical_Forecast_${trial.name.replace(/\s+/g,'_')}_${ts2}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      showToast('✓ Forecast exported successfully');
+    } catch(e2) {
+      showToast('Export failed: ' + e2.message);
+      console.error('Export error:', e2);
+    }
+  }
   showToast('Clinical forecast exported ✓');
 }
 
@@ -8207,8 +8287,9 @@ function buildForecastTable(result, arms, trial) {
       const drugLabel = `${primaryDrug?.drug_label || arm.arm_name} ${freqLabel}`;
 
       runInRows += `<tr style="background:#fefce8;border-top:1px solid #fde68a">
-        <td style="padding:5px 10px;font-size:12px;color:#92400e;font-style:italic">↳ Run-in</td>
-        <td style="padding:5px 10px;font-size:12px;color:#92400e;font-style:italic">${drugLabel} <span style="font-size:10px;background:#fde68a;border-radius:3px;padding:1px 4px">${runInDays}d</span></td>
+        <td style="padding:5px 10px;font-size:12px;color:#92400e;font-style:italic" title="Screened patients receiving run-in drug before randomisation">
+          ↳ Run-in: ${arm.arm_name} — ${drugLabel} <span style="font-size:10px;background:#fde68a;border-radius:3px;padding:1px 4px">${runInDays}d</span>
+        </td>
         ${runInMonthlyPts.map(v => `<td style="padding:5px 10px;text-align:right;font-size:12px;color:#92400e;background:#fefce8">${v > 0 ? v : '—'}</td>`).join('')}
         <td style="padding:5px 10px;text-align:right;font-size:12px;font-weight:700;color:#92400e;background:#fefce8">${runInPeak}</td>
       </tr>`;
@@ -8216,8 +8297,8 @@ function buildForecastTable(result, arms, trial) {
 
     // Add a summary note about run-in
     runInRows += `<tr style="background:#fef9c3">
-      <td colspan="${periods.length + 3}" style="padding:6px 10px;font-size:11px;color:#92400e;font-style:italic">
-        ⚠ Run-in rows show screened patients (pre-randomisation). ~${screenedPts} screened → ${totalPts} randomised (${trial.screen_failure_pct||20}% screen failure). Run-in duration: ${runInDays} days.
+      <td colspan="${periods.length + 2}" style="padding:6px 10px;font-size:11px;color:#92400e;font-style:italic">
+        ⚠ Run-in rows show screened patients (pre-randomisation) per arm. ~${screenedPts} screened → ${totalPts} randomised (${trial.screen_failure_pct||20}% screen failure). Run-in duration: ${runInDays} days.
       </td>
     </tr>`;
   }
@@ -8309,12 +8390,9 @@ function buildForecastTable(result, arms, trial) {
     const peak = Math.max(...row.data);
     const total = row.data.reduce((s,v)=>s+v,0);
     return `<tr style="background:${row.bg}">
-      <td style="padding:6px 10px;font-size:12px;font-weight:600;color:${row.color}" title="${row.note}">${row.label} <span style="font-size:10px;opacity:.6" title="${row.note}">ℹ</span></td>
+      <td style="padding:6px 10px;font-size:12px;font-weight:600;color:${row.color}" title="${row.note}">${row.label} <span style="font-size:10px;opacity:.6;cursor:help" title="${row.note}">ℹ</span></td>
       ${row.data.map(v=>`<td style="padding:5px 10px;text-align:right;font-size:12px;color:${row.color};background:${row.bg}">${v>0?v:'—'}</td>`).join('')}
       <td style="padding:5px 10px;text-align:right;font-size:12px;font-weight:700;color:${row.color};background:${row.bg}">${row.peak?peak:total}</td>
-    </tr>
-    <tr style="background:${row.bg}">
-      <td colspan="${periods.length+2}" style="padding:2px 10px 8px;font-size:10.5px;color:${row.color};opacity:.7;font-style:italic;background:${row.bg}">${row.note}</td>
     </tr>`;
   }).join('');
 
@@ -15159,7 +15237,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: CLINICAL-v9b | Syntax fix');
+    console.log('MERIDIAN VERSION: CLINICAL-v11c | Fix pfRows push filter bug');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
