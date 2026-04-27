@@ -873,6 +873,14 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
     </div>
   </nav>
   <div class="sidebar-foot">
+    <!-- Always-visible Ask Meridian button -->
+    <div onclick="toggleHelpChat()" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;cursor:pointer;border-radius:8px;background:var(--accent-lt);border:1px solid var(--accent-md)" onmouseover="this.style.background='var(--accent-md)'" onmouseout="this.style.background='var(--accent-lt)'">
+      <span style="font-size:16px">🤖</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--accent)">Ask Meridian</div>
+        <div style="font-size:10px;color:var(--text3)">AI assistant</div>
+      </div>
+    </div>
     <div class="user-pill" style="cursor:pointer" onclick="showUserMenu()" title="Account options">
       <div class="avatar" id="sidebar-avatar">?</div>
       <div style="flex:1;min-width:0">
@@ -883,7 +891,7 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
     </div>
     <!-- user menu dropdown -->
     <div id="user-menu" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);margin-top:6px;overflow:hidden">
-      <div id="user-menu-admin" style="display:none;padding:8px 12px;font-size:13px;cursor:pointer;color:var(--text2)" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background=''" onclick="openUserMgmt()">👥 Manage Users</div>
+      <div id="user-menu-admin" style="display:none;padding:8px 12px;font-size:13px;cursor:pointer;color:var(--text2)" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background='' " onclick="openUserMgmt()">👥 Manage Users</div>
       <div style="padding:8px 12px;font-size:13px;cursor:pointer;color:var(--red)" onmouseenter="this.style.background='var(--red-lt)'" onmouseleave="this.style.background=''" onclick="signOut()">→ Sign Out</div>
     </div>
   </div>
@@ -3315,6 +3323,329 @@ async function forgotPassword() {
 }
 
 // ── Sign out ───────────────────────────────
+// ════════════════════════════════════════════════════════════
+// ASK MERIDIAN — Three-Tier AI Knowledge Assistant
+// ════════════════════════════════════════════════════════════
+
+const _MERIDIAN_KB = {
+
+  // ── TIER 1: Public — all roles ────────────────────────────
+  tier1: `
+## MERIDIAN ERP — USER GUIDE
+
+### What is Meridian ERP?
+Meridian ERP is a pharmaceutical supply chain management system designed for precommercial and clinical-stage pharma companies. It covers inventory management, purchase orders, sales orders, MRP planning, quality control, demand forecasting, and clinical trial supply planning.
+
+### Navigation
+The left sidebar contains all modules organised by section:
+- OPERATIONS: Inventory, Locations, Purchase Orders, Goods Receipts, Sales Orders
+- PLANNING: MRP & Production, Scenarios, Clinical, Bill of Materials, Demand Forecast, Planning Table
+- MASTER DATA: SKU Master, Suppliers, Customers
+- SYSTEM: Implementation, Alerts, Reports, Quality Control, Users
+
+### Inventory Management
+The Inventory module tracks batches of drug product and raw materials. Each batch has a status (Released, Restricted, Quarantined, Damaged, Expired, Written Off), quantity, manufacture date, expiry date, and location. Batches are listed under each SKU. You can filter by status, search by batch number, and click any batch to view details or take actions.
+
+### Batch Statuses
+- Released: Available for use, shipment, or MRP planning
+- Restricted: On hold — cannot be used until released by QC
+- Quarantined: Under investigation — separate from usable stock
+- Damaged: Physically compromised
+- Expired: Past expiry date — excluded from planning
+- Written Off: Permanently removed from inventory
+
+### Purchase Orders
+Create POs from Purchase Orders → + New PO. Fill in material, supplier, quantity, and expected delivery date. Save as Draft. An Approver or Admin must approve the PO with an e-signature before goods can be received against it.
+
+### Goods Receipts
+After a PO is approved, go to Goods Receipts → + Receive Stock. Select the PO, enter the received quantity, batch number, manufacture date, and expiry date. Post the GR to create a new batch in inventory.
+
+### Sales Orders
+Create SOs from Sales Orders → + New SO. Enter customer, SKU, quantity, and ship date. Confirm the SO with a Customer PO reference number. Confirmed SOs feed into MRP demand.
+
+### Quality Control
+The QC module shows batches requiring disposition decisions. Click a batch to Release, Restrict, Quarantine, or Write Off. All QC decisions require an e-signature (your password) and a reason.
+
+### Reports
+The Executive Dashboard shows key financial and inventory KPIs. If a yellow banner appears, it means some SKUs are missing cost data — click the SKU chips to fix them directly.
+
+### User Management
+Admins can invite users via Users → + Invite User. Enter email, name, and role. The user receives an invitation email. Admins can also reset passwords and deactivate users from the Users table.
+
+### Roles
+- Admin: Full access including user management
+- Planner: Can edit inventory, planning, and forecasts
+- Approver: Can approve POs and confirm SOs
+- QC: Can make batch disposition decisions
+- Viewer: Read-only access to all modules
+
+### Alerts
+The bell icon in the top right shows active alerts: expiring batches, overdue SOs, pending PO approvals, and low stock warnings. Click any alert to navigate directly to the relevant record.
+
+### Audit Trail
+Every change to GMP-relevant data is recorded automatically with the user, timestamp, old value, new value, and reason for change. The audit trail cannot be edited or deleted.
+
+### Electronic Signatures
+PO approvals and QC batch disposition decisions require an electronic signature — you enter your password to confirm. This creates a tamper-proof record meeting 21 CFR Part 11 principles.
+`,
+
+  // ── TIER 2: Operational — planners, approvers, QC, admins ─
+  tier2: `
+## MERIDIAN ERP — OPERATIONAL KNOWLEDGE
+
+### MRP & Production Planning
+MRP (Material Requirements Planning) calculates how much of each material you need to produce and when, based on demand forecast, current inventory, safety stock targets, and production lead times. Run MRP from MRP & Production → Run MRP. The result shows planned orders for each SKU across an 18-month horizon.
+
+### MRP Outputs Explained
+- Stock on Hand: Current released inventory for that SKU
+- Safety Stock: Your target minimum buffer (set in Planning Config)
+- Planned Orders: System-suggested production or purchase orders to meet demand
+- Available Balance: Projected inventory after fulfilling demand — negative means a shortage
+- Negative balances shown in red are action items requiring planned order creation
+
+### How MRP Uses Demand
+MRP combines two demand sources: the active forecast version and confirmed Sales Orders. It takes the higher of the two for each month (FEFO logic). Clinical trial demand can be fed into MRP by setting a clinical forecast version as active.
+
+### Safety Stock
+Safety stock is set per SKU in Planning Config as months of forward coverage. For example, 3 months safety stock means you always want enough inventory to cover 3 months of demand as a buffer against supply disruptions.
+
+### Planning Time Fence (PTF)
+Orders within the PTF cannot be auto-modified by MRP — they require manual action. This protects confirmed manufacturing schedules from being overridden by demand changes.
+
+### Firming Planned Orders
+Click a planned order row in MRP to expand it, then click Firm Order with an e-signature. Firmed orders survive MRP re-runs unchanged. Use this to lock in orders you've already committed to with your CMO.
+
+### Clinical Planning — Forecast Output
+The Clinical Forecast Output shows monthly drug demand for each trial arm across the trial timeline. The demand includes:
+- Active randomised patients receiving treatment each month
+- A supply overage buffer (set per arm, typically 20-25%)
+- Run-in period demand (if the trial has a pre-randomisation drug dispensing visit)
+
+### Patient Flow Table
+The patient flow table shows the complete patient journey:
+- Screened (Run-in): Patients entering the screening/run-in phase each month
+- Randomised per arm: Patients successfully randomised (prior month screened × pass rate ÷ arms)
+- Active on Treatment: Cumulative patients currently receiving drug (rolling treatment window)
+- Completed Treatment: Patients finishing their course this month
+- Discontinued: Patients who dropped out this month
+
+### Interim Analysis Scenario
+The interim analysis scenario models the probability-weighted drug demand impact of a mid-trial data review. You specify the timing (e.g. month 9), assign probabilities to each outcome (early stop for efficacy, futility, safety, sample size expansion, or continue unchanged), and the model calculates:
+- Weighted Expected demand: the statistically expected supply need given those probabilities
+- Max Waste Risk: units potentially unused if the trial stops early
+
+### Enrolment Curves
+- S-Curve (recommended): Slow start as sites open, peak enrolment in the middle months, taper as targets fill. Most realistic for multi-centre trials.
+- Linear: Equal patients enrolled every month — used when sites are all open from day 1
+- Front-loaded: Fast initial enrolment, slows down — used when patient pool is large and accessible
+- Back-loaded: Slow start, accelerates — used when site activation takes time
+
+### Screen Failure Rate
+The percentage of screened patients who do not get randomised. For oncology trials this can be 25-40% (strict eligibility criteria). For cardiovascular trials typically 15-25%. This affects total drug demand because run-in drug must be supplied to all screened patients, not just those randomised.
+
+### Dosing Frequency Options
+- QD (Once Daily): 1 dose per day × 28 days = 28 units per cycle
+- BID (Twice Daily): 2 doses per day × 28 days = 56 units per cycle
+- Q4W (Every 4 Weeks): 1 dose per 28 days = 1 unit per cycle (biologics, SC injections)
+- The system calculates units per cycle automatically from dose per administration × frequency × cycle length
+
+### Event-Driven Trial Design
+Used for trials that run until a specified number of clinical events occur (e.g. 221 graft loss events, 300 deaths). The treatment duration is not fixed — it depends on how quickly events accumulate. The model estimates trial duration from: enrolment months + (target events ÷ events per month at peak enrolment). You can override the estimate with a fixed duration from your biostatistician.
+
+### Deploying Updates
+When a new version of Meridian ERP is released: download the new index.html, upload it to your GitHub main branch (replacing the existing file), and Netlify auto-deploys within 30-60 seconds. Verify by checking the browser console for the MERIDIAN VERSION marker.
+
+### Inviting Users (Step by Step)
+1. Navigate to Users module (left sidebar)
+2. Click + Invite User (top right)
+3. Enter email address, full name, and select role
+4. Click Send Invitation
+5. User receives email from noreply@meridianscm.com with a sign-in link
+6. After they log in, their role is set automatically
+7. Use ↺ Reset PW to send a password reset email to any user
+
+### Supabase — Common Operations
+- View all users: Supabase Dashboard → Authentication → Users
+- Run SQL queries: Supabase Dashboard → SQL Editor
+- Check RLS policies: Supabase Dashboard → Authentication → Policies
+- View database tables: Supabase Dashboard → Table Editor
+`,
+
+  // ── TIER 3: Proprietary — admin only ─────────────────────
+  tier3: `
+## MERIDIAN ERP — ADMIN & TECHNICAL KNOWLEDGE
+## ⚠ CONFIDENTIAL — Do not share with non-admin users
+
+### Architecture Overview
+Meridian ERP is a single-file HTML/CSS/JS SPA (Single Page Application) deployed via Netlify CDN. The backend is Supabase PostgreSQL with Row Level Security (RLS). Authentication is handled by Supabase Auth. Admin operations (user invite, delete) use a Supabase Edge Function to avoid exposing the service role key in the frontend.
+
+### How MRP Calculates Planned Orders (Detailed)
+1. Load all DB data: materials, batches, BOM lines, planning config, forecast, sales orders
+2. For each SKU in the planning config, run getMRPSkus() to compute live shortage data
+3. For each planning period (18 months), calculate:
+   - Gross Requirement = max(active forecast quantity, confirmed SO demand)
+   - Net Requirement = Gross Requirement + Safety Stock Target - Projected On Hand
+   - Planned Order = ceil(Net Requirement / batch_size) × batch_size
+4. Apply Planning Time Fence — freeze orders within PTF days
+5. Cascade requirements up the BOM using bomMult (computed by _computeBomMultMap)
+
+### BOM Multiplier Computation
+bomMult for each SKU is computed by traversing the BOM tree from the L1 root. For each BOM line, qty_per values are multiplied down each branch. This is done dynamically at boot via buildMRPSkuConfig() — it is no longer hardcoded. The function _computeBomMultMap(rootId) returns a flat map of {childId → cumulative bomMult from root}.
+
+### Clinical Forecast Engine (Detailed)
+generateClinicalForecast(trial, arms, visits) works as follows:
+1. Compute S-curve enrolment weights using enrolmentWeights(months, curve)
+2. Adjust total patients for screen failure: enrolled = ceil(total / (1 - screenFail))
+3. For each arm, parse the drugs JSON from arm.notes (DRUGS: prefix) or arm.drugs field
+4. For each drug, compute unitsPerCycle = dose_per_admin × frequency_multiplier × cycle_days
+5. For each month, compute active patients = sum of all enrolled cohorts still within treatMo window × dropout survival
+6. Demand = ceil(active × unitsPerMonth × overage)
+7. Run-in demand: if visits include pre-Day-0 dispensing, add screened patient drug consumption distributed by enrolment weights
+8. Aggregate by SKU + period date
+
+### S-Curve Weight Algorithm
+Uses logistic function: weight[i] = sigmoid((i/(m-1)×10-5)). Differences between consecutive sigmoid values give the monthly enrolment proportions. These are normalised to sum to 1.
+
+### RLS Architecture
+Every table has a company_id column. The get_my_company_id() function returns the company_id of the authenticated user from user_profiles. All RLS policies use this function: USING (company_id = get_my_company_id()). This ensures complete data isolation between clients at the database level.
+
+### Per-Client Deployment Process
+1. Create new Supabase project in the MeridianERP organisation
+2. Run meridian_schema.sql in the SQL Editor (creates all 32 tables, triggers, functions)
+3. Run meridian_rls.sql (enables RLS on all tables, creates company isolation policies)
+4. Run deploy_client.py — enter client name, slug, Supabase URL, anon key
+5. Upload generated clients/[slug]/index.html and netlify.toml to a new Netlify site
+6. Set Supabase Site URL to the Netlify URL
+7. Invite client admin via Supabase Auth → Users → Invite user
+8. Set role = admin in user_profiles table
+
+### Edge Function — admin-operations
+Deployed to Supabase Edge Functions. Handles: invite_user (uses admin inviteUserByEmail API), delete_user (permanent auth deletion), reset_password (admin password reset). The service role key is provided automatically by Supabase as SUPABASE_SERVICE_ROLE_KEY. SITE_URL secret must be set manually.
+
+### Security Headers (netlify.toml)
+Content-Security-Policy restricts scripts to self + cdnjs.cloudflare.com, API connections to *.supabase.co + api.anthropic.com. X-Frame-Options: DENY prevents clickjacking. HSTS enforced for 1 year with preload.
+
+### Validation Package
+Full pharma validation package exists: VMP (MRD-VAL-001), IQ (MRD-IQ-001), OQ (MRD-OQ-001), PQ (MRD-PQ-001), UAT Scripts (MRD-UAT-001), URS (MRD-URS-001). These are Word documents generated for client onboarding and regulatory compliance.
+
+### Known Technical Decisions
+- Single-file architecture: chosen for simplicity of deployment and zero build-step requirement
+- safeStorage wrapper: abstracts localStorage with graceful fallback for tracking prevention
+- Version markers in console: MERIDIAN VERSION string injected at boot for deployment verification
+- Drug demand stored in demand_forecast table with version_id linking to forecast_versions
+- Clinical arm drugs stored as JSON in arm.notes field with DRUGS: prefix (no schema change needed)
+`,
+};
+
+// ── Ask Meridian state ────────────────────────────────────
+let _askMeridianHistory = [];
+let _askMeridianOpen = false;
+
+function openAskMeridian() {
+  _askMeridianOpen = true;
+  // Update role display in footer
+  const footer = document.querySelector('#modal-ask-meridian [style*="Responses are scoped"]');
+  if (footer) footer.textContent = `Responses are scoped to your role (${currentProfile?.role||'viewer'}). Some information is admin-only.`;
+  openModal('modal-ask-meridian');
+  document.getElementById('ask-meridian-input')?.focus();
+}
+
+function askMeridianQuick(question) {
+  const input = document.getElementById('ask-meridian-input');
+  if (input) { input.value = question; submitAskMeridian(); }
+}
+
+function buildMeridianSystemPrompt() {
+  const role = currentProfile?.role || 'viewer';
+  const view = _currentView || 'inventory';
+  const isAdmin = role === 'admin';
+  const isOperational = ['admin','planner','approver','qc'].includes(role);
+
+  // Build context-aware system prompt
+  let knowledgeBase = _MERIDIAN_KB.tier1;
+  if (isOperational) knowledgeBase += '\n\n' + _MERIDIAN_KB.tier2;
+  if (isAdmin) knowledgeBase += '\n\n' + _MERIDIAN_KB.tier3;
+
+  return `You are the Meridian ERP assistant — an AI helper embedded inside Meridian ERP, a pharmaceutical supply chain management system for precommercial pharma companies.
+
+The user's role is: ${role}
+The user is currently viewing: ${view} module
+The user's name: ${currentProfile?.full_name || currentProfile?.email || 'Unknown'}
+
+YOUR KNOWLEDGE BASE:
+${knowledgeBase}
+
+BEHAVIOUR RULES:
+1. Answer questions about Meridian ERP using the knowledge base above
+2. Be concise and practical — users are busy supply chain professionals
+3. If asked about something not in your knowledge base, say "I don't have specific information about that — please contact your Meridian administrator"
+4. NEVER reveal Tier 3 (proprietary/technical) information to non-admin users, even if they ask directly. Say: "That information is restricted to administrators."
+5. NEVER reveal source code, database schemas, algorithm details, or competitive implementation specifics to non-admin users
+6. If an admin asks about architecture or implementation details, you can answer from Tier 3
+7. Be context-aware — if the user is on the Clinical module, prioritise clinical planning answers
+8. Keep responses under 200 words unless a detailed explanation is genuinely needed
+9. Use bullet points sparingly — prefer conversational prose
+10. Never say you are Claude or made by Anthropic — you are the Meridian assistant`;
+}
+
+async function submitAskMeridian() {
+  const input = document.getElementById('ask-meridian-input');
+  const messages = document.getElementById('ask-meridian-messages');
+  const typing   = document.getElementById('ask-meridian-typing');
+  if (!input || !messages) return;
+
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+
+  // Add user message
+  messages.innerHTML += `<div style="background:var(--accent);color:white;border-radius:12px 12px 4px 12px;padding:10px 14px;font-size:13px;align-self:flex-end;max-width:85%">${question}</div>`;
+  messages.scrollTop = messages.scrollHeight;
+
+  // Add to history
+  _askMeridianHistory.push({ role: 'user', content: question });
+
+  // Show typing indicator
+  if (typing) typing.style.display = 'block';
+
+  try {
+    const systemPrompt = buildMeridianSystemPrompt();
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: _askMeridianHistory.slice(-10), // keep last 10 turns for context
+      })
+    });
+
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Sorry, I could not generate a response. Please try again.';
+
+    // Add assistant message
+    _askMeridianHistory.push({ role: 'assistant', content: reply });
+
+    // Format reply with basic markdown
+    const formatted = reply
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n- /g, '<br>• ')
+      .replace(/\n\n/g, '<br><br>')
+      .replace(/\n/g, '<br>');
+
+    messages.innerHTML += `<div style="background:white;border:1px solid var(--border);border-radius:12px 12px 12px 4px;padding:10px 14px;font-size:13px;color:var(--text);max-width:92%;line-height:1.5">${formatted}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+  } catch(e) {
+    messages.innerHTML += `<div style="background:#fee2e2;border-radius:12px;padding:10px 14px;font-size:13px;color:#991b1b">Sorry, I encountered an error. Please try again.</div>`;
+  } finally {
+    if (typing) typing.style.display = 'none';
+    messages.scrollTop = messages.scrollHeight;
+  }
+}
+
 function signOut() {
   // Log logout before clearing session (non-blocking)
   if (_accessToken && currentProfile) {
@@ -3935,7 +4266,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: CLINICAL-v11c | Fix pfRows push filter bug');
+    console.log('MERIDIAN VERSION: CLINICAL-v14 | Ask Meridian upgraded + always visible');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -6609,45 +6940,106 @@ async function runAllTests() {
 let _helpOpen    = false;
 let _helpHistory = []; // conversation history for multi-turn
 
-const HELP_SYSTEM_PROMPT = `You are Meridian Assistant, an expert AI helper embedded inside Meridian ERP — a pharmaceutical supply chain management system.
+function getMeridianKnowledgeBase() {
+  const role = currentProfile?.role || 'viewer';
+  const isAdmin = role === 'admin';
+  const isOperational = ['admin','planner','approver','qc'].includes(role);
 
-You help users with:
-1. STEP-BY-STEP GUIDANCE — how to perform transactions and use features
-2. TROUBLESHOOTING — diagnose problems and suggest fixes
-3. DATA QUESTIONS — answer questions about their live inventory, batches, orders, MRP
-4. TRAINING — explain concepts like MRP, safety stock, BOM, PTF, firming, etc.
+  const tier1 = `
+MERIDIAN ERP MODULE GUIDE:
 
-MERIDIAN ERP MODULES:
-- Inventory: Manage materials, batches, QC status, storage locations, transfers
-- Goods Receipts: Post purchase GRs and production GRs
-- Sales Orders: Create and fulfil customer orders, generate invoices
-- Purchase Orders: Create POs, submit for approval (>$10k threshold), receive goods
-- MRP & Planning: Run multi-level or single-level MRP, firm planned orders, convert to WO/PO
-- Demand Forecast: Manage forecast versions, edit 18-month forecast
-- Planning Table: View 18-month supply plan per SKU
-- Quality Control: QC Hold/Release/Reject batches, CoA reference, 8-item checklist
-- Scenarios: Create what-if scenarios with forecast adjustments, SS/LT/MOQ overrides
-- Reports: Export Planning Table, MRP Summary, Batch Inventory, Forecast, Transfers, Sales Orders
-- Alerts: Stock below SS, batch expiry, negative MRP balance, overdue SOs
-- User Management: Manage roles (Admin/Planner/QC/Approver/Viewer), deactivate users
-- Test Suite: Run 30 automated end-to-end tests across schema, data, logic, workflow, roles
+Inventory: Tracks batches of drug product and raw materials. Each batch has status (Released/Restricted/Quarantined/Damaged/Expired/Written Off), quantity, manufacture date, expiry date, and location. Filter by status, search by batch number. Click any batch to view or take actions.
 
-BOM CHAIN: L1-FG-001 (Finish Goods) → L2-DP-001 (Drug Product ×5) → L3-DS-001 (Drug Substance ×50) → L4-RM-A (Raw Material A ×500) + L4-RM-B (Raw Material B ×1000)
+Purchase Orders: Create from Purchase Orders → + New PO. Fill material, supplier, quantity, expected delivery. Save as Draft. An Approver/Admin must e-sign to approve before goods can be received.
 
-KEY CONCEPTS:
-- PTF (Planning Time Fence): Lead time from today — orders inside PTF are frozen
-- Firming: Converts a Planned Order to a committed order that survives MRP reruns
-- Safety Stock: Average monthly forecast × BOM multiplier × SS months coverage
-- MRP runs: Multi-level cascades L1→L4; Single-level runs only the active tab
-- PO Approval: POs above $10,000 require an Approver-role user (cannot self-approve)
+Goods Receipts: After PO approved, go to Goods Receipts → + Receive Stock. Select PO, enter received quantity, batch number, dates. Post GR to create new batch in inventory. GRs can be reversed with a mandatory reason.
+
+Sales Orders: Create from Sales Orders → + New SO. Enter customer, SKU, quantity, ship date. Confirm with a Customer PO reference. Confirmed SOs feed MRP demand.
+
+Quality Control: Shows batches needing disposition. Click a batch to Release, Restrict, Quarantine, or Write Off. All decisions require e-signature and reason.
+
+MRP & Production: Calculates planned supply orders from demand forecast + confirmed SOs, current inventory, safety stock, and lead times. Run MRP from MRP & Production → Run MRP. Negative balances (red) = shortages requiring action. Firm planned orders to lock them in.
+
+Clinical Planning: Plan drug supply for clinical trials. Protocol Builder (6 steps) → Forecast Output → Clinical Scenarios. Supports multi-drug arms, dosing frequency (QD/BID/Q4W etc.), screen failure rate, run-in periods, interim analysis, and event-driven trial designs.
+
+Reports: Executive Dashboard shows financial KPIs. Yellow banner = missing SKU cost data — click chips to fix.
+
+User Management: Admins can invite via Users → + Invite User. Email, name, role. Reset passwords with ↺ Reset PW button.
+
+Alerts: Bell icon shows expiring batches, overdue SOs, pending approvals, low stock.
+
+Batch Statuses: Released (available), Restricted (QC hold), Quarantined (under investigation), Damaged, Expired (excluded from planning), Written Off (permanently removed).
+
+Electronic Signatures: Required for PO approval and QC decisions. Enter your password to confirm. Creates tamper-proof audit records.
+
+Audit Trail: Every GMP-relevant change is automatically recorded with user, timestamp, old value, new value, and reason. Cannot be edited or deleted.`;
+
+  const tier2 = !isOperational ? '' : `
+
+OPERATIONAL KNOWLEDGE:
+
+MRP Calculation (how-to level): MRP combines active forecast + confirmed SO demand (takes higher of the two per month). Subtracts projected on-hand inventory and safety stock to get net requirement. Planned orders fill the gap. Safety stock = target months of forward coverage set per SKU in Planning Config.
+
+Planning Time Fence (PTF): Orders within PTF days of today are frozen — MRP won't auto-modify them. Protects committed CMO schedules.
+
+Firming Planned Orders: Click PLO row → expand → Firm Order (e-signature required). Firmed orders survive MRP re-runs. Use when you've committed to a manufacturer.
+
+Clinical Forecast — Patient Flow Table:
+- Screened (Run-in): patients entering screening/run-in each month
+- Randomised per arm: prior month screened × pass rate ÷ number of arms (1-month lag)
+- Active on Treatment: cumulative patients in treatment window (rolling)
+- Completed: finishing treatment this month
+- Discontinued: dropout patients leaving
+
+Enrolment Curves: S-Curve (recommended — realistic ramp/peak/taper), Linear (equal every month), Front-loaded (fast start), Back-loaded (slow start accelerates).
+
+Screen Failure Rate: % of screened patients not randomised. Affects run-in drug demand — all screened patients receive run-in drug, not just those randomised.
+
+Dosing Frequencies: QD=1×/day, BID=2×/day, Q4W=1 injection per 4 weeks. Units per cycle = dose per admin × frequency multiplier × cycle days.
+
+Interim Analysis Scenario: Models probability-weighted supply impact of mid-trial data review. Set timing (month), assign probabilities to each outcome (efficacy stop, futility stop, safety stop, expansion, continue). Model calculates Weighted Expected demand and Max Waste Risk.
+
+Event-Driven Trial Design: Trial runs until target events occur (e.g. 221 graft loss events). Duration estimated from: enrolment months + (target events ÷ events/month at peak). Override with biostatistician's estimate.
+
+Deploying Updates: Download new index.html → upload to GitHub main branch → Netlify auto-deploys in ~30 seconds. Verify via browser console MERIDIAN VERSION marker.
+
+Inviting Users: Users → + Invite User → email, name, role → Send Invitation → user gets email from noreply@meridianscm.com.`;
+
+  const tier3 = !isAdmin ? '' : `
+
+ADMIN & TECHNICAL KNOWLEDGE (CONFIDENTIAL):
+
+Architecture: Single-file HTML/CSS/JS SPA deployed via Netlify CDN. Backend: Supabase PostgreSQL with Row Level Security. Auth: Supabase Auth. Admin operations use a Supabase Edge Function (admin-operations) to keep service role key off the frontend.
+
+MRP Engine Detail: getMRPSkus() computes live shortage data. buildMRPSkuConfig() dynamically builds the SKU config from DB.materials + DB.bom_lines + DB.planning_config at boot. _computeBomMultMap(rootId) traverses BOM tree multiplying qty_per values down each branch to get cumulative bomMult per child SKU. No longer hardcoded.
+
+Clinical Forecast Engine Detail: generateClinicalForecast() — computes S-curve weights via logistic function, adjusts for screen failure (enrolled = total / (1-screenFail)), parses drugs JSON from arm.notes (DRUGS: prefix), computes unitsPerCycle = dose_per_admin × freq_mult × cycle_days, computes active patients as rolling window sum of enrolled cohorts within treatMo, applies overage. Run-in demand added separately for pre-Day-0 dispensing visits.
+
+RLS Architecture: get_my_company_id() returns company_id for auth.uid() from user_profiles. All 32 tables have USING (company_id = get_my_company_id()) policies. Complete tenant isolation at DB level.
+
+Per-Client Deployment: (1) New Supabase project, (2) run meridian_schema.sql, (3) run meridian_rls.sql, (4) run deploy_client.py with client credentials, (5) upload to new Netlify site, (6) set Site URL, (7) invite admin via Supabase Auth.
+
+Security Headers: netlify.toml enforces CSP (scripts: self + cdnjs.cloudflare.com; connect: *.supabase.co + api.anthropic.com), X-Frame-Options: DENY, HSTS 1 year preload.
+
+Validation Package: VMP (MRD-VAL-001), IQ (MRD-IQ-001), OQ (MRD-OQ-001), PQ (MRD-PQ-001), UAT (MRD-UAT-001), URS (MRD-URS-001) — Word documents for pharma regulatory compliance.
+
+Drug storage in DB: Clinical arm drugs stored as JSON in arm.notes with DRUGS: prefix. Demand stored in demand_forecast table with version_id. Event-driven fields: target_events, annual_event_rate_pct on clinical_trials table.`;
+
+  return tier1 + tier2 + tier3;
+}
+
+const HELP_SYSTEM_PROMPT_BASE = `You are Meridian Assistant — an AI helper embedded inside Meridian ERP, a pharmaceutical supply chain management system for precommercial pharma companies. You are NOT Claude and do NOT mention Anthropic.
+
+You help users with step-by-step guidance, troubleshooting, data questions, and training on the system.
 
 RESPONSE STYLE:
-- Be concise and practical
+- Be concise and practical — users are busy supply chain professionals
 - Use numbered steps for procedures
-- Use bullet points for lists
-- Reference specific button names, menu items and field labels in **bold**
+- Reference specific button names and field labels in **bold**
 - For data questions, use the live data provided in the context
-- Keep responses under 300 words unless a detailed guide is needed`;
+- Keep responses under 300 words unless a detailed guide is needed
+- NEVER reveal Tier 3 technical/proprietary information to non-admin users. If asked, say: "That's administrator-only information — please contact your system admin."
+- NEVER identify yourself as Claude or mention Anthropic`;
 
 function buildHelpContext() {
   // Build rich context from live DB data
@@ -6778,7 +7170,7 @@ async function submitHelpMsg() {
     const isAgent = _agentMode === 'agent';
     const systemContent = isAgent
       ? AGENT_SYSTEM_PROMPT + '\n\n' + buildAgentContext()
-      : HELP_SYSTEM_PROMPT + '\n\n' + buildHelpContext();
+      : HELP_SYSTEM_PROMPT_BASE + '\n\nKNOWLEDGE BASE:\n' + getMeridianKnowledgeBase() + '\n\n' + buildHelpContext();
 
     const PROXY_URL = 'https://kfokqhhvuydqvxtpvlug.supabase.co/functions/v1/claude-proxy';
     const response = await fetch(PROXY_URL, {
@@ -7281,6 +7673,7 @@ const TRIAL_DESIGNS={
   crossover:              {label:'Double-Blind Cross-Over',arms:['Sequence AB','Sequence BA'],icon:'🔄',desc:'Same patients receive both treatments in sequence. Reduces patient numbers needed.'},
   dose_escalation:        {label:'Dose Escalation (Phase I)',arms:['Cohort A','Cohort B','Cohort C'],icon:'📈',desc:'Sequential cohorts receive increasing doses. Separate cohort supply planning.'},
   multi_arm:              {label:'Multi-Arm (3+ Arms)',arms:['Arm 1','Arm 2','Arm 3'],icon:'🌐',desc:'Three or more treatment arms. Common in Phase II basket/umbrella trials.'},
+  event_driven:           {label:'Event-Driven (Time-to-Event)',arms:['Active','Placebo/Control'],icon:'⏱️',desc:'Trial runs until a target number of events (e.g. graft loss, death, progression) occurs. Common in CV, transplant, and oncology OS trials.'},
 };
 
 const ENROLMENT_CURVES={
@@ -7763,9 +8156,55 @@ function buildStep5(){
   const d=_draftTrial;const ph=d.phase||'Phase II';const def=PHASE_DEFAULTS[ph]||PHASE_DEFAULTS['Phase II'];
   const preview=buildEnrolPreview(d.enrolment_months||def.enrolment_months,d.total_patients||def.patients,d.enrolment_curve||'s_curve');
   const est=buildDemandEst(d);
+  const isEventDriven = _draftTrial.trial_design === 'event_driven';
+
+  // Event-driven: estimate trial duration from event rate
+  const targetEvents      = d.target_events || 221;
+  const annualEventRatePct= d.annual_event_rate_pct || 15;
+  const annualEventRate   = annualEventRatePct / 100;
+  const totalPts          = d.total_patients || def.patients;
+  const enrolMo           = d.enrolment_months || def.enrolment_months;
+  // Expected events per month at full enrolment = patients × annual_rate / 12
+  // Estimated duration = time until target events accumulate (simplified)
+  const eventsPerMonth    = totalPts * annualEventRate / 12;
+  const estDurationMo     = eventsPerMonth > 0 ? Math.ceil(enrolMo + (targetEvents / eventsPerMonth)) : 36;
+  const estTreatMo        = Math.max(1, estDurationMo - enrolMo);
+
+  // Auto-update treatment_months for event-driven trials
+  if (isEventDriven && (!d.treatment_months || d._treatment_months_auto)) {
+    _draftTrial.treatment_months = estTreatMo;
+    _draftTrial._treatment_months_auto = true;
+  }
+
+  const eventDrivenFields = isEventDriven ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:10px">⏱️ Event-Driven Parameters</div>
+      <div class="sp-row">
+        <div class="fg"><label class="fl">Target Number of Events *</label>
+          <input class="fi" type="number" id="ct-target-events" value="${targetEvents}" min="1"
+            onchange="_draftTrial.target_events=parseInt(this.value);_draftTrial._treatment_months_auto=true;document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML()">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">e.g. 221 graft loss events, 300 deaths, 400 PFS events</div>
+        </div>
+        <div class="fg"><label class="fl">Expected Annual Event Rate (%)</label>
+          <input class="fi" type="number" id="ct-event-rate" value="${annualEventRatePct}" min="1" max="100" step="0.5"
+            onchange="_draftTrial.annual_event_rate_pct=parseFloat(this.value);_draftTrial._treatment_months_auto=true;document.getElementById('clinical-tab-content').innerHTML=buildWizardHTML()">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">% of patients reaching primary endpoint per year</div>
+        </div>
+      </div>
+      <div style="background:white;border-radius:6px;padding:10px;margin-top:4px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
+        <div><div style="font-size:18px;font-weight:700;color:#1e40af">${eventsPerMonth.toFixed(1)}</div><div style="font-size:11px;color:var(--text3)">Events/month at peak</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#1e40af">${estDurationMo}</div><div style="font-size:11px;color:var(--text3)">Est. total duration (months)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#1e40af">${estTreatMo}</div><div style="font-size:11px;color:var(--text3)">Est. treatment period (months)</div></div>
+      </div>
+      <div style="font-size:11px;color:#1e40af;margin-top:8px;font-style:italic">
+        Treatment duration is estimated automatically from event rate. You can override it below.
+      </div>
+    </div>` : '';
+
   return`<div style="font-size:16px;font-weight:700;margin-bottom:20px">Step 5 — Enrolment & Buffer Parameters</div>
+${eventDrivenFields}
 <div class="sp-row"><div class="fg"><label class="fl">Total Patients (to be randomised) *</label><input class="fi" type="number" id="ct-patients" value="${d.total_patients||def.patients}" min="1" onchange="_draftTrial.total_patients=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,this.value,document.getElementById('ct-curve').value)"></div><div class="fg"><label class="fl">Enrolment Period (months) *</label><input class="fi" type="number" id="ct-enrol-mo" value="${d.enrolment_months||def.enrolment_months}" min="1" onchange="_draftTrial.enrolment_months=parseInt(this.value);document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(this.value,document.getElementById('ct-patients').value,document.getElementById('ct-curve').value)"></div></div>
-<div class="sp-row"><div class="fg"><label class="fl">Treatment Duration per Patient (months) *</label><input class="fi" type="number" id="ct-treat-mo" value="${d.treatment_months||def.treatment_months}" min="1" onchange="_draftTrial.treatment_months=parseInt(this.value)"></div><div class="fg"><label class="fl">Dropout / Discontinuation Rate (%)</label><input class="fi" type="number" id="ct-dropout" value="${d.dropout_rate_pct||def.dropout}" min="0" max="50" onchange="_draftTrial.dropout_rate_pct=parseFloat(this.value)"></div></div>
+<div class="sp-row"><div class="fg"><label class="fl">Treatment Duration per Patient (months) ${isEventDriven?'<span style="color:var(--text3);font-size:11px">(auto-estimated)</span>':' *'}</label><input class="fi" type="number" id="ct-treat-mo" value="${d.treatment_months||estTreatMo||def.treatment_months}" min="1" onchange="_draftTrial.treatment_months=parseInt(this.value);_draftTrial._treatment_months_auto=false"></div><div class="fg"><label class="fl">Dropout / Discontinuation Rate (%)</label><input class="fi" type="number" id="ct-dropout" value="${d.dropout_rate_pct||def.dropout}" min="0" max="50" onchange="_draftTrial.dropout_rate_pct=parseFloat(this.value)"></div></div>
 <div class="sp-row"><div class="fg"><label class="fl">Screen Failure Rate (%)</label><input class="fi" type="number" id="ct-screen-fail" value="${d.screen_failure_pct||def.screen_failure||20}" min="0" max="80" onchange="_draftTrial.screen_failure_pct=parseFloat(this.value)" placeholder="% screened who don't enrol"><div style="font-size:11px;color:var(--text3);margin-top:3px">Screens needed: ~<b>${Math.ceil((d.total_patients||def.patients)/(1-((d.screen_failure_pct||def.screen_failure||20)/100)))}</b> patients to achieve ${d.total_patients||def.patients} randomised</div></div><div class="fg"><label class="fl">Enrolment Curve</label><select class="fi" id="ct-curve" onchange="_draftTrial.enrolment_curve=this.value;document.getElementById('enrol-prev').innerHTML=buildEnrolPreview(document.getElementById('ct-enrol-mo').value,document.getElementById('ct-patients').value,this.value)">${Object.entries(ENROLMENT_CURVES).map(([k,v])=>`<option value="${k}" ${(d.enrolment_curve||'s_curve')===k?'selected':''}>${v}</option>`).join('')}</select></div></div>
 <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">ENROLMENT CURVE PREVIEW</div><div id="enrol-prev" style="display:flex;gap:2px;align-items:flex-end;height:60px">${preview}</div></div>
 <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px"><div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:4px">📊 Estimated Total Drug Requirement</div><div style="font-size:12px;color:#166534">${est}</div></div>`;
@@ -7950,7 +8389,7 @@ function buildStep6(){
   return`<div style="font-size:16px;font-weight:700;margin-bottom:20px">Step 6 — Review & Save</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
 <div style="background:var(--bg);border-radius:8px;padding:14px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">TRIAL DETAILS</div>${info([['Name',d.name||'—'],['Phase',d.phase||'—'],['Indication',d.indication||'—'],['Status',d.status||'Draft'],['Start',d.enrolment_start_date||'—']])}</div>
-<div style="background:var(--bg);border-radius:8px;padding:14px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">PARAMETERS</div>${info([['Design',des.label||d.trial_design||'—'],['Patients',(d.total_patients||'—').toLocaleString()],['Enrolment',(d.enrolment_months||'—')+' months'],['Treatment',(d.treatment_months||'—')+' months'],['Dropout',(d.dropout_rate_pct||'—')+'%'],['Curve',d.enrolment_curve||'—']])}</div>
+<div style="background:var(--bg);border-radius:8px;padding:14px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">PARAMETERS</div>${info([['Design',des.label||d.trial_design||'—'],['Patients',(d.total_patients||'—').toLocaleString()],['Enrolment',(d.enrolment_months||'—')+' months'],['Treatment',(d.treatment_months||'—')+' months'],['Dropout',(d.dropout_rate_pct||'—')+'%'],['Curve',d.enrolment_curve||'—'],...(d.trial_design==='event_driven'?[['Target Events',(d.target_events||'—').toLocaleString()],['Annual Event Rate',(d.annual_event_rate_pct||'—')+'%']]:[])])}</div>
 </div>
 <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:20px">
 <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">TREATMENT ARMS</div>
@@ -7979,7 +8418,9 @@ function wizardNext(){
 
 function collectStep(s){
   if(s===1){_draftTrial.name=document.getElementById('ct-name')?.value?.trim();_draftTrial.indication=document.getElementById('ct-indication')?.value?.trim();_draftTrial.phase=document.getElementById('ct-phase')?.value;_draftTrial.status=document.getElementById('ct-status')?.value;_draftTrial.enrolment_start_date=document.getElementById('ct-start')?.value;_draftTrial.sponsor=document.getElementById('ct-sponsor')?.value?.trim();_draftTrial.notes=document.getElementById('ct-notes')?.value?.trim();}
-  if(s===5){_draftTrial.total_patients=parseInt(document.getElementById('ct-patients')?.value)||0;_draftTrial.enrolment_months=parseInt(document.getElementById('ct-enrol-mo')?.value)||0;_draftTrial.treatment_months=parseInt(document.getElementById('ct-treat-mo')?.value)||0;_draftTrial.dropout_rate_pct=parseFloat(document.getElementById('ct-dropout')?.value)||10;_draftTrial.screen_failure_pct=parseFloat(document.getElementById('ct-screen-fail')?.value)||20;_draftTrial.enrolment_curve=document.getElementById('ct-curve')?.value||'s_curve';}
+  if(s===5){_draftTrial.total_patients=parseInt(document.getElementById('ct-patients')?.value)||0;_draftTrial.enrolment_months=parseInt(document.getElementById('ct-enrol-mo')?.value)||0;_draftTrial.treatment_months=parseInt(document.getElementById('ct-treat-mo')?.value)||0;_draftTrial.dropout_rate_pct=parseFloat(document.getElementById('ct-dropout')?.value)||10;_draftTrial.screen_failure_pct=parseFloat(document.getElementById('ct-screen-fail')?.value)||20;_draftTrial.enrolment_curve=document.getElementById('ct-curve')?.value||'s_curve';
+    if(_draftTrial.trial_design==='event_driven'){_draftTrial.target_events=parseInt(document.getElementById('ct-target-events')?.value)||221;_draftTrial.annual_event_rate_pct=parseFloat(document.getElementById('ct-event-rate')?.value)||15;}
+  }
 }
 
 function validateStep(s){
@@ -8019,6 +8460,8 @@ async function saveTrial(){
       enrolment_start_date: _draftTrial.enrolment_start_date || null,
       dropout_rate_pct:     parseFloat(_draftTrial.dropout_rate_pct) || 10,
       screen_failure_pct:   parseFloat(_draftTrial.screen_failure_pct) || 20,
+      target_events:        _draftTrial.trial_design==='event_driven' ? (parseInt(_draftTrial.target_events)||null) : null,
+      annual_event_rate_pct:_draftTrial.trial_design==='event_driven' ? (parseFloat(_draftTrial.annual_event_rate_pct)||null) : null,
       sponsor:              _draftTrial.sponsor || null,
       notes:                _draftTrial.notes   || null,
     };
@@ -15237,7 +15680,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: CLINICAL-v11c | Fix pfRows push filter bug');
+    console.log('MERIDIAN VERSION: CLINICAL-v14 | Ask Meridian upgraded + always visible');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
@@ -19333,8 +19776,8 @@ function enrichPOsWithReceiptTotals() {
     <div style="display:flex;align-items:center;gap:10px">
       <div style="width:32px;height:32px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px" id="help-mode-icon">&#x1F9E0;</div>
       <div>
-        <div style="color:#fff;font-weight:700;font-size:14px" id="help-mode-title">Meridian Assistant</div>
-        <div style="color:rgba(255,255,255,.7);font-size:11px" id="help-context-label">Powered by Claude</div>
+        <div style="color:#fff;font-weight:700;font-size:14px" id="help-mode-title">Ask Meridian</div>
+        <div style="color:rgba(255,255,255,.7);font-size:11px" id="help-context-label">Powered by Claude · Role-aware knowledge</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
