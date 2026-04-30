@@ -611,6 +611,9 @@ tbody tr.sp-active td { background: var(--accent-lt) !important; border-left: 3p
       </div>
     </div>
     <div id="auth-error" class="auth-error"></div>
+    <div id="auth-invite-hint" style="display:none;background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#92400e">
+      ⚠ Your invitation link may have expired or already been used. Please enter your email and password below, or contact your administrator to resend the invitation.
+    </div>
     <div class="fg"><label class="fl">Email address</label><input class="fi" type="email" id="auth-email" placeholder="you@company.com" autocomplete="email"></div>
     <div class="fg" style="margin-bottom:20px"><label class="fl">Password</label><input class="fi" type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="auth-btn" id="auth-submit-btn" onclick="signIn()">Sign in</button>
@@ -4266,7 +4269,7 @@ async function bootApp() {
     computeAlerts();
     updateQCBadge();
     showToast('Connected to Supabase ✓');
-    console.log('MERIDIAN VERSION: CLINICAL-v14 | Ask Meridian upgraded + always visible');
+    console.log('MERIDIAN VERSION: CLINICAL-v15 | PKCE invite flow fix');
     console.log('Boot complete!');
   } catch (err) {
     clearTimeout(bootTimeout);
@@ -15680,7 +15683,7 @@ async function launchApp(accessToken) {
       updateSidebarUser(); // re-render with company name
     }
 
-    console.log('MERIDIAN VERSION: CLINICAL-v14 | Ask Meridian upgraded + always visible');
+    console.log('MERIDIAN VERSION: CLINICAL-v15 | PKCE invite flow fix');
     console.log('Signed in as:', currentProfile.email, '| Role:', currentProfile.role, '| Company:', currentProfile.company_name || 'unknown');
 
     DB.materials       = await sb('materials',       { order: 'id' }).catch(()=>[]);
@@ -18405,15 +18408,60 @@ async function saveBatchEdit(id, originalQty) {
 (async function init() {
   // ── Check URL hash AND query params for Supabase auth tokens ──
   // Supabase puts invite/recovery tokens in the URL hash: #access_token=...&type=invite
+  // OR as a PKCE code: ?code=xxx (when using inviteUserByEmail via Edge Function)
   const hash     = window.location.hash.substring(1);
   const hashP    = Object.fromEntries(new URLSearchParams(hash));
   const queryP   = Object.fromEntries(new URLSearchParams(window.location.search));
   // Merge — hash takes priority
   const params   = { ...queryP, ...hashP };
 
+  // ── PKCE code exchange (inviteUserByEmail / magic link flow) ──
+  if (params.code) {
+    try {
+      console.log('PKCE code detected — exchanging for session...');
+      history.replaceState(null, '', window.location.pathname); // clean URL
+      const res = await fetch(SB_URL + '/auth/v1/token?grant_type=pkce', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auth_code: params.code, code_verifier: null })
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        // Check if this is a new user who needs to set a password
+        const userRes = await fetch(SB_URL + '/auth/v1/user', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + data.access_token }
+        });
+        const userData = await userRes.json();
+        // New invite users have no password set (last_sign_in_at is null or very recent)
+        const isNewUser = !userData.last_sign_in_at ||
+          (Date.now() - new Date(userData.last_sign_in_at).getTime()) < 60000;
+        if (isNewUser || params.type === 'invite' || params.type === 'signup') {
+          showSetPasswordScreen(data.access_token, data.refresh_token);
+          return;
+        }
+        // Existing user (recovery/magic link) — log them in directly
+        safeStorage.setItem('sb-session', JSON.stringify({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_at: Math.floor(Date.now()/1000) + (data.expires_in || 3600)
+        }));
+        currentUser = {};
+        await launchApp(data.access_token);
+        return;
+      }
+    } catch(e) {
+      console.error('PKCE exchange failed:', e);
+      // Show helpful hint on login screen
+      setTimeout(() => {
+        const hint = document.getElementById('auth-invite-hint');
+        if (hint) hint.style.display = 'block';
+      }, 500);
+      // Fall through to normal login screen
+    }
+  }
+
   if (params.access_token && (params.type === 'invite' || params.type === 'signup')) {
     // New user accepting invite — show password setup screen
-    // Do NOT clear hash yet — clear it after screen is shown
     showSetPasswordScreen(params.access_token, params.refresh_token);
     history.replaceState(null, '', window.location.pathname); // clean URL without reload
     return;
